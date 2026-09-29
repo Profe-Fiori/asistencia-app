@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function Home() {
-  // Estado de Autenticación
   const [autenticado, setAutenticado] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
+  const [mostrarPassword, setMostrarPassword] = useState(false)
 
   const [cursos, setCursos] = useState([])
   const [cursoSeleccionado, setCursoSeleccionado] = useState('')
@@ -19,10 +19,9 @@ export default function Home() {
   const [escuchando, setEscuchando] = useState(false)
   const [transcripcion, setTranscripcion] = useState('')
 
-  // Logo oficial incorporado en Base64
-  const logoSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsAQMAAABga+KlAAAABlBMVEUAAAD///+l2Z/dAAAAAXRSTlMAQObYZgAAAFBJREFUeF7t0cENgCAQQNEL+q88Kj0rB2aI/CbbZAMz4D/h1h0lZ2N9Nf96Y8p4d7v9n5eYn1v1vLve+v38+e77/vP3P4GvD8c/h6cAAAAASUVORK5CYII=" // (Logo integrado de respaldo optimizado)
+  // Logo institucional claro y visible
+  const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
 
-  // 1. Cargar cursos al iniciar sesión
   useEffect(() => {
     if (!autenticado) return
     async function cargarCursos() {
@@ -35,7 +34,6 @@ export default function Home() {
     cargarCursos()
   }, [autenticado])
 
-  // 2. Cargar alumnos según el curso seleccionado
   useEffect(() => {
     if (!cursoSeleccionado || !autenticado) return
     async function cargarAlumnosPorCurso() {
@@ -55,7 +53,6 @@ export default function Home() {
     cargarAlumnosPorCurso()
   }, [cursoSeleccionado, autenticado])
 
-  // Cargar asistencias según la fecha elegida y el curso
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && autenticado) {
       async function cargarResumenPorFecha() {
@@ -80,7 +77,6 @@ export default function Home() {
     }))
   }
 
-  // Mando por Voz Inteligente
   const iniciarMicrofono = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       alert('Tu navegador no soporta reconocimiento de voz por micrófono.')
@@ -171,7 +167,7 @@ export default function Home() {
     ])
   }
 
-  // Pantalla de Login / Acceso Restringido
+  // Pantalla de Login / Acceso Restringido con visor de contraseña
   if (!autenticado) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
@@ -186,7 +182,6 @@ export default function Home() {
         <form 
           onSubmit={(e) => {
             e.preventDefault()
-            // Contraseña de acceso (puedes cambiar 'profe2026' cuando gustes)
             if (passwordInput === 'profe2026') {
               setAutenticado(true)
             } else {
@@ -195,13 +190,24 @@ export default function Home() {
           }}
           style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '300px', gap: '12px' }}
         >
-          <input
-            type="password"
-            placeholder="Ingrese su contraseña"
-            value={passwordInput}
-            onChange={(e) => setPasswordInput(e.target.value)}
-            style={{ padding: '14px', borderRadius: '8px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', fontSize: '16px', textAlign: 'center' }}
-          />
+          {/* Contenedor de input contraseña + botón ver/ocultar */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <input
+              type={mostrarPassword ? 'text' : 'password'}
+              placeholder="Ingrese su contraseña"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              style={{ width: '100%', padding: '14px', paddingRight: '45px', borderRadius: '8px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', fontSize: '16px', textAlign: 'center' }}
+            />
+            <button
+              type="button"
+              onClick={() => setMostrarPassword(!mostrarPassword)}
+              style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '18px' }}
+            >
+              {mostrarPassword ? '👁️' : '👁️‍🗨️'}
+            </button>
+          </div>
+
           <button
             type="submit"
             style={{ padding: '14px', borderRadius: '8px', backgroundColor: '#2563eb', color: '#ffffff', fontWeight: 'bold', border: 'none', fontSize: '16px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)' }}
@@ -213,11 +219,10 @@ export default function Home() {
     )
   }
 
-  // Aplicación Principal (Una vez logueado)
+  // Aplicación Principal
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '800px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
-      {/* Encabezado con Logo y Nombre */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
         <img 
           src={logoSrc} 
@@ -229,7 +234,6 @@ export default function Home() {
         </h1>
       </div>
 
-      {/* Botón Principal de Comando por Voz */}
       <div style={{ textAlign: 'center', marginBottom: '20px' }}>
         <button
           onClick={iniciarMicrofono}
@@ -254,7 +258,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Seleccionar Curso y Fecha */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
         <select
           value={cursoSeleccionado}
@@ -274,7 +277,6 @@ export default function Home() {
         />
       </div>
 
-      {/* Pestañas de Navegación */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={() => setPestaña('asistencia')}
@@ -342,7 +344,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Vista Tomar Asistencia */}
       {pestaña === 'asistencia' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Tomar Asistencia ({alumnos.length} Alumnos) - {fecha}</h3>
@@ -401,14 +402,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* Pestaña Ver Asistencia por Fecha */}
       {pestaña === 'resumen' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Asistencia del día: {fecha}</h3>
           {resumenFecha.length === 0 ? (
             <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', textAlign: 'center', border: '1px solid #334155' }}>
               <p style={{ color: '#94a3b8' }}>No hay registros guardados para este curso en la fecha seleccionada ({fecha}).</p>
-              <p style={{ fontSize: '14px', color: '#60a5fa', marginTop: '8px' }}>Cambiá la fecha arriba o cargá la asistencia del día.</p>
             </div>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -446,7 +445,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Vista de Participaciones */}
       {pestaña === 'participacion' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Registrar Participación / Nota</h3>
@@ -492,7 +490,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Vista de Informes */}
       {pestaña === 'informe' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Informe por Alumno</h3>
