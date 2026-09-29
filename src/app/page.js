@@ -11,6 +11,7 @@ export default function Home() {
   const [pestaña, setPestaña] = useState('asistencia')
   const [alumnoInforme, setAlumnoInforme] = useState(null)
   const [historialAlumno, setHistorialAlumno] = useState([])
+  const [resumenFecha, setResumenFecha] = useState([])
   const [escuchando, setEscuchando] = useState(false)
   const [transcripcion, setTranscripcion] = useState('')
 
@@ -46,6 +47,24 @@ export default function Home() {
     cargarAlumnosPorCurso()
   }, [cursoSeleccionado])
 
+  // Cargar asistencias según la fecha elegida y el curso al abrir la pestaña Ver Asistencia
+  useEffect(() => {
+    if (pestaña === 'resumen' && cursoSeleccionado) {
+      async function cargarResumenPorFecha() {
+        const { data } = await supabase
+          .from('asistencias')
+          .select('*, alumnos!inner(curso_id, apellido, nombre)')
+          .eq('fecha', fecha)
+          .eq('alumnos.curso_id', cursoSeleccionado)
+
+        if (data) {
+          setResumenFecha(data)
+        }
+      }
+      cargarResumenPorFecha()
+    }
+  }, [pestaña, fecha, cursoSeleccionado])
+
   const toggleEstado = (id) => {
     setAsistencias((prev) => ({
       ...prev,
@@ -53,7 +72,7 @@ export default function Home() {
     }))
   }
 
-  // Mando por Voz Inteligente (Asistencia, Participaciones e Informes)
+  // Mando por Voz Inteligente
   const iniciarMicrofono = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       alert('Tu navegador no soporta reconocimiento de voz por micrófono.')
@@ -76,22 +95,16 @@ export default function Home() {
       const texto = event.results[event.results.length - 1][0].transcript.toLowerCase()
       setTranscripcion(`Comando detectado: "${texto}"`)
 
-      // Procesar comando según la pestaña activa
       alumnos.forEach(async (a) => {
         const apellidoLower = a.apellido.toLowerCase()
         if (texto.includes(apellidoLower)) {
-
-          // Acciones para ASISTENCIA
           if (pestaña === 'asistencia') {
             if (texto.includes('ausente')) {
               setAsistencias((prev) => ({ ...prev, [a.id]: 'AUSENTE' }))
             } else if (texto.includes('presente')) {
               setAsistencias((prev) => ({ ...prev, [a.id]: 'PRESENTE' }))
             }
-          }
-
-          // Acciones para PARTICIPACIONES
-          else if (pestaña === 'participacion') {
+          } else if (pestaña === 'participacion') {
             await supabase.from('participaciones').insert({
               alumno_id: a.id,
               fecha,
@@ -100,12 +113,6 @@ export default function Home() {
             })
             alert(`Nota registrada para ${a.nombre} ${a.apellido}: "${texto}"`)
           }
-
-          // Acciones para INFORMES
-          else if (pestaña === 'informe') {
-            cargarInformeAlumno(a)
-          }
-
         }
       })
     }
@@ -137,6 +144,7 @@ export default function Home() {
       alert('Error al guardar asistencias: ' + error.message)
     } else {
       alert('¡Asistencias guardadas exitosamente!')
+      setPestaña('resumen')
     }
   }
 
@@ -204,59 +212,78 @@ export default function Home() {
         />
       </div>
 
-      {/* Pestañas de Navegación en Azul y Blanco */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center' }}>
+      {/* Pestañas de Navegación */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={() => setPestaña('asistencia')}
           style={{
-            padding: '12px 18px',
+            padding: '10px 14px',
             borderRadius: '8px',
             cursor: 'pointer',
             backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b',
             color: '#ffffff',
             border: pestaña === 'asistencia' ? '2px solid #60a5fa' : '1px solid #334155',
             fontWeight: 'bold',
-            flex: 1
+            flex: 1,
+            minWidth: '95px'
           }}
         >
-          Asistencia
+          Tomar
+        </button>
+        <button
+          onClick={() => setPestaña('resumen')}
+          style={{
+            padding: '10px 14px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b',
+            color: '#ffffff',
+            border: pestaña === 'resumen' ? '2px solid #60a5fa' : '1px solid #334155',
+            fontWeight: 'bold',
+            flex: 1,
+            minWidth: '95px'
+          }}
+        >
+          Ver Asistencia
         </button>
         <button
           onClick={() => setPestaña('participacion')}
           style={{
-            padding: '12px 18px',
+            padding: '10px 14px',
             borderRadius: '8px',
             cursor: 'pointer',
             backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b',
             color: '#ffffff',
             border: pestaña === 'participacion' ? '2px solid #60a5fa' : '1px solid #334155',
             fontWeight: 'bold',
-            flex: 1
+            flex: 1,
+            minWidth: '95px'
           }}
         >
-          Participaciones
+          Notas
         </button>
         <button
           onClick={() => setPestaña('informe')}
           style={{
-            padding: '12px 18px',
+            padding: '10px 14px',
             borderRadius: '8px',
             cursor: 'pointer',
             backgroundColor: pestaña === 'informe' ? '#2563eb' : '#1e293b',
             color: '#ffffff',
             border: pestaña === 'informe' ? '2px solid #60a5fa' : '1px solid #334155',
             fontWeight: 'bold',
-            flex: 1
+            flex: 1,
+            minWidth: '95px'
           }}
         >
           Informes
         </button>
       </div>
 
-      {/* Vista de Asistencias */}
+      {/* Vista Tomar Asistencia */}
       {pestaña === 'asistencia' && (
         <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Tomar Asistencia ({alumnos.length} Alumnos)</h3>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Tomar Asistencia ({alumnos.length} Alumnos) - {fecha}</h3>
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {alumnos.map((a) => (
               <li
@@ -267,7 +294,7 @@ export default function Home() {
                   backgroundColor: '#1e293b',
                   borderRadius: '8px',
                   display: 'flex',
-                  justify: 'space-between',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   border: '1px solid #334155'
                 }}
@@ -312,6 +339,51 @@ export default function Home() {
         </div>
       )}
 
+      {/* Pestaña Ver Asistencia por Fecha */}
+      {pestaña === 'resumen' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Asistencia del día: {fecha}</h3>
+          {resumenFecha.length === 0 ? (
+            <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', textAlign: 'center', border: '1px solid #334155' }}>
+              <p style={{ color: '#94a3b8' }}>No hay registros guardados para este curso en la fecha seleccionada ({fecha}).</p>
+              <p style={{ fontSize: '14px', color: '#60a5fa', marginTop: '8px' }}>Cambiá la fecha arriba o cargá la asistencia del día.</p>
+            </div>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {resumenFecha.map((r, index) => (
+                <li
+                  key={index}
+                  style={{
+                    padding: '12px 14px',
+                    marginBottom: '8px',
+                    backgroundColor: '#1e293b',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    border: '1px solid #334155'
+                  }}
+                >
+                  <span style={{ fontWeight: '500' }}>{r.alumnos.apellido}, {r.alumnos.nombre}</span>
+                  <span
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '6px',
+                      backgroundColor: r.estado === 'PRESENTE' ? '#16a34a' : '#dc2626',
+                      color: '#ffffff',
+                      fontSize: '14px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {r.estado}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* Vista de Participaciones */}
       {pestaña === 'participacion' && (
         <div>
@@ -326,7 +398,7 @@ export default function Home() {
                   backgroundColor: '#1e293b',
                   borderRadius: '8px',
                   display: 'flex',
-                  justify: 'space-between',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   border: '1px solid #334155'
                 }}
@@ -404,5 +476,4 @@ export default function Home() {
       )}
     </div>
   )
-      }
-    
+}
