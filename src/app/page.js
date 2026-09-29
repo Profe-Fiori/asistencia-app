@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function Home() {
+  // Estado de Autenticación
+  const [autenticado, setAutenticado] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+
   const [cursos, setCursos] = useState([])
   const [cursoSeleccionado, setCursoSeleccionado] = useState('')
   const [alumnos, setAlumnos] = useState([])
@@ -15,8 +19,12 @@ export default function Home() {
   const [escuchando, setEscuchando] = useState(false)
   const [transcripcion, setTranscripcion] = useState('')
 
-  // 1. Cargar cursos al iniciar
+  // Logo oficial incorporado en Base64
+  const logoSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsAQMAAABga+KlAAAABlBMVEUAAAD///+l2Z/dAAAAAXRSTlMAQObYZgAAAFBJREFUeF7t0cENgCAQQNEL+q88Kj0rB2aI/CbbZAMz4D/h1h0lZ2N9Nf96Y8p4d7v9n5eYn1v1vLve+v38+e77/vP3P4GvD8c/h6cAAAAASUVORK5CYII=" // (Logo integrado de respaldo optimizado)
+
+  // 1. Cargar cursos al iniciar sesión
   useEffect(() => {
+    if (!autenticado) return
     async function cargarCursos() {
       const { data } = await supabase.from('cursos').select('*').order('nombre')
       if (data && data.length > 0) {
@@ -25,11 +33,11 @@ export default function Home() {
       }
     }
     cargarCursos()
-  }, [])
+  }, [autenticado])
 
   // 2. Cargar alumnos según el curso seleccionado
   useEffect(() => {
-    if (!cursoSeleccionado) return
+    if (!cursoSeleccionado || !autenticado) return
     async function cargarAlumnosPorCurso() {
       const { data } = await supabase
         .from('alumnos')
@@ -45,11 +53,11 @@ export default function Home() {
       }
     }
     cargarAlumnosPorCurso()
-  }, [cursoSeleccionado])
+  }, [cursoSeleccionado, autenticado])
 
-  // Cargar asistencias según la fecha elegida y el curso al abrir la pestaña Ver Asistencia
+  // Cargar asistencias según la fecha elegida y el curso
   useEffect(() => {
-    if (pestaña === 'resumen' && cursoSeleccionado) {
+    if (pestaña === 'resumen' && cursoSeleccionado && autenticado) {
       async function cargarResumenPorFecha() {
         const { data } = await supabase
           .from('asistencias')
@@ -63,7 +71,7 @@ export default function Home() {
       }
       cargarResumenPorFecha()
     }
-  }, [pestaña, fecha, cursoSeleccionado])
+  }, [pestaña, fecha, cursoSeleccionado, autenticado])
 
   const toggleEstado = (id) => {
     setAsistencias((prev) => ({
@@ -163,13 +171,63 @@ export default function Home() {
     ])
   }
 
+  // Pantalla de Login / Acceso Restringido
+  if (!autenticado) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
+        <img 
+          src={logoSrc} 
+          alt="Logo Profe Fiori" 
+          style={{ width: '130px', height: '130px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #3b82f6', marginBottom: '20px', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)' }} 
+        />
+        <h1 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '5px', textAlign: 'center' }}>PROFESOR FIORI NICOLAS</h1>
+        <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '25px' }}>Panel Exclusivo de Administración</p>
+        
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault()
+            // Contraseña de acceso (puedes cambiar 'profe2026' cuando gustes)
+            if (passwordInput === 'profe2026') {
+              setAutenticado(true)
+            } else {
+              alert('Contraseña incorrecta')
+            }
+          }}
+          style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '300px', gap: '12px' }}
+        >
+          <input
+            type="password"
+            placeholder="Ingrese su contraseña"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            style={{ padding: '14px', borderRadius: '8px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', fontSize: '16px', textAlign: 'center' }}
+          />
+          <button
+            type="submit"
+            style={{ padding: '14px', borderRadius: '8px', backgroundColor: '#2563eb', color: '#ffffff', fontWeight: 'bold', border: 'none', fontSize: '16px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)' }}
+          >
+            Ingresar al Panel
+          </button>
+        </form>
+      </div>
+    )
+  }
+
+  // Aplicación Principal (Una vez logueado)
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '800px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
-      {/* Título Principal */}
-      <h1 style={{ textAlign: 'center', color: '#ffffff', fontWeight: 'bold', fontSize: '22px', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
-        PROFESOR FIORI NICOLAS
-      </h1>
+      {/* Encabezado con Logo y Nombre */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
+        <img 
+          src={logoSrc} 
+          alt="Logo" 
+          style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #3b82f6' }} 
+        />
+        <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '20px', margin: 0 }}>
+          PROFESOR FIORI NICOLAS
+        </h1>
+      </div>
 
       {/* Botón Principal de Comando por Voz */}
       <div style={{ textAlign: 'center', marginBottom: '20px' }}>
