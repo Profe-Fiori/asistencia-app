@@ -11,6 +11,7 @@ export default function Home() {
   const [cursoSeleccionado, setCursoSeleccionado] = useState('')
   const [alumnos, setAlumnos] = useState([])
   const [asistencias, setAsistencias] = useState({})
+  const [conteos, setConteos] = useState({}) // Estado para los contadores de participación
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [pestaña, setPestaña] = useState('asistencia')
   const [alumnoInforme, setAlumnoInforme] = useState(null)
@@ -19,7 +20,6 @@ export default function Home() {
   const [escuchando, setEscuchando] = useState(false)
   const [transcripcion, setTranscripcion] = useState('')
 
-  // Logo institucional claro y visible
   const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
 
   useEffect(() => {
@@ -34,24 +34,38 @@ export default function Home() {
     cargarCursos()
   }, [autenticado])
 
+  // Cargar alumnos y sus contadores del día
   useEffect(() => {
     if (!cursoSeleccionado || !autenticado) return
-    async function cargarAlumnosPorCurso() {
-      const { data } = await supabase
+    async function cargarDatosCurso() {
+      const { data: alms } = await supabase
         .from('alumnos')
         .select('*')
         .eq('curso_id', cursoSeleccionado)
         .order('apellido')
 
-      if (data) {
-        setAlumnos(data)
-        const iniciales = {}
-        data.forEach((a) => (iniciales[a.id] = 'PENDIENTE'))
-        setAsistencias(iniciales)
+      if (alms) {
+        setAlumnos(alms)
+        const inicialesAsis = {}
+        alms.forEach((a) => (inicialesAsis[a.id] = 'PENDIENTE'))
+        setAsistencias(inicialesAsis)
+
+        // Cargar conteos de la fecha actual
+        const { data: conts } = await supabase
+          .from('conteo_participaciones')
+          .select('*')
+          .eq('fecha', fecha)
+
+        const mapaConteos = {}
+        alms.forEach((a) => {
+          const encontrado = conts?.find((c) => c.alumno_id === a.id)
+          mapaConteos[a.id] = encontrado ? encontrado.cantidad : 0
+        })
+        setConteos(mapaConteos)
       }
     }
-    cargarAlumnosPorCurso()
-  }, [cursoSeleccionado, autenticado])
+    cargarDatosCurso()
+  }, [cursoSeleccionado, fecha, autenticado])
 
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && autenticado) {
@@ -77,64 +91,21 @@ export default function Home() {
     }))
   }
 
-  const iniciarMicrofono = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Tu navegador no soporta reconocimiento de voz por micrófono.')
-      return
-    }
+  // Modificar contador de participación (+1 o -1)
+  const cambiarConteo = async (alumno_id, delta) => {
+    const valorActual = conteos[alumno_id] || 0
+    const nuevoValor = valorActual + delta
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = new SpeechRecognition()
+    // Actualizar visualmente al toque
+    setConteos((prev) => ({ ...prev, [alumno_id]: nuevoValor }))
 
-    recognition.lang = 'es-AR'
-    recognition.continuous = true
-    recognition.interimResults = false
-
-    recognition.onstart = () => {
-      setEscuchando(true)
-      setTranscripcion('Escuchando orden...')
-    }
-
-    recognition.onresult = async (event) => {
-      const texto = event.results[event.results.length - 1][0].transcript.toLowerCase()
-      setTranscripcion(`Comando detectado: "${texto}"`)
-
-      alumnos.forEach(async (a) => {
-        const apellidoLower = a.apellido.toLowerCase()
-        if (texto.includes(apellidoLower)) {
-          if (pestaña === 'asistencia') {
-            if (texto.includes('ausente')) {
-              setAsistencias((prev) => ({ ...prev, [a.id]: 'AUSENTE' }))
-            } else if (texto.includes('presente')) {
-              setAsistencias((prev) => ({ ...prev, [a.id]: 'PRESENTE' }))
-            }
-          } else if (pestaña === 'participacion') {
-            await supabase.from('participaciones').insert({
-              alumno_id: a.id,
-              fecha,
-              tipo: 'Participación',
-              descripcion: texto
-            })
-            alert(`Nota registrada para ${a.nombre} ${a.apellido}: "${texto}"`)
-          }
-        }
-      })
-    }
-
-    recognition.onerror = (event) => {
-      console.error('Error de voz:', event.error)
-      setEscuchando(false)
-    }
-
-    recognition.onend = () => {
-      setEscuchando(false)
-    }
-
-    if (escuchando) {
-      recognition.stop()
-    } else {
-      recognition.start()
-    }
+    // Guardar en Supabase
+    await supabase
+      .from('conteo_participaciones')
+      .upsert(
+        { alumno_id, fecha, cantidad: nuevoValor },
+        { onConflict: ['alumno_id', 'fecha'] }
+      )
   }
 
   const guardarAsistencias = async () => {
@@ -151,7 +122,7 @@ export default function Home() {
     if (error) {
       alert('Error al guardar asistencias: ' + error.message)
     } else {
-      alert('¡Asistencias guardadas/actualizadas exitosamente!')
+      alert('¡Asistencias guardadas exitosamente!')
       setPestaña('resumen')
     }
   }
@@ -159,15 +130,14 @@ export default function Home() {
   const cargarInformeAlumno = async (alumno) => {
     setAlumnoInforme(alumno)
     const { data: asis } = await supabase.from('asistencias').select('*').eq('alumno_id', alumno.id)
-    const { data: part } = await supabase.from('participaciones').select('*').eq('alumno_id', alumno.id)
+    const { data: conts } = await supabase.from('conteo_participaciones').select('*').eq('alumno_id', alumno.id)
 
     setHistorialAlumno([
-      ...(asis || []).map((a) => ({ ...a, tipo_reg: 'Asistencia' })),
-      ...(part || []).map((p) => ({ ...p, tipo_reg: 'Participación' })),
+      ...(asis || []).map((a) => ({ fecha: a.fecha, tipo_reg: 'Asistencia', detalle: a.estado })),
+      ...(conts || []).map((c) => ({ fecha: c.fecha, tipo_reg: 'Participaciones (Total día)', detalle: c.cantidad })),
     ])
   }
 
-  // Pantalla de Login / Acceso Restringido con visor de contraseña
   if (!autenticado) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
@@ -190,7 +160,6 @@ export default function Home() {
           }}
           style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '300px', gap: '12px' }}
         >
-          {/* Contenedor de input contraseña + botón ver/ocultar */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <input
               type={mostrarPassword ? 'text' : 'password'}
@@ -219,7 +188,6 @@ export default function Home() {
     )
   }
 
-  // Aplicación Principal
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '800px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
@@ -232,30 +200,6 @@ export default function Home() {
         <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '20px', margin: 0 }}>
           PROFESOR FIORI NICOLAS
         </h1>
-      </div>
-
-      <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-        <button
-          onClick={iniciarMicrofono}
-          style={{
-            padding: '14px 24px',
-            borderRadius: '30px',
-            backgroundColor: escuchando ? '#ef4444' : '#2563eb',
-            color: '#ffffff',
-            border: 'none',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)'
-          }}
-        >
-          {escuchando ? '🔴 Detener Micrófono' : '🎙️ Comando de Voz'}
-        </button>
-        {transcripcion && (
-          <p style={{ marginTop: '10px', fontSize: '14px', color: '#93c5fd', fontStyle: 'italic' }}>
-            {transcripcion}
-          </p>
-        )}
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -324,7 +268,7 @@ export default function Home() {
             minWidth: '95px'
           }}
         >
-          Notas
+          Participaciones
         </button>
         <button
           onClick={() => setPestaña('informe')}
@@ -407,7 +351,7 @@ export default function Home() {
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Asistencia del día: {fecha}</h3>
           {resumenFecha.length === 0 ? (
             <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', textAlign: 'center', border: '1px solid #334155' }}>
-              <p style={{ color: '#94a3b8' }}>No hay registros guardados para este curso en la fecha seleccionada ({fecha}).</p>
+              <p style={{ color: '#94a3b8' }}>No hay registros guardados para este curso en la fecha seleccionada.</p>
             </div>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -445,47 +389,68 @@ export default function Home() {
         </div>
       )}
 
+      {/* Pestaña de Participaciones con Contadores (+ y -) */}
       {pestaña === 'participacion' && (
         <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Registrar Participación / Nota</h3>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Contador de Participaciones - {fecha}</h3>
           <ul style={{ listStyle: 'none', padding: 0 }}>
-            {alumnos.map((a) => (
-              <li
-                key={a.id}
-                style={{
-                  padding: '14px',
-                  marginBottom: '8px',
-                  backgroundColor: '#1e293b',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  border: '1px solid #334155'
-                }}
-              >
-                <span>{a.apellido}, {a.nombre}</span>
-                <button
-                  onClick={async () => {
-                    const desc = prompt(`Ingrese la participación o nota para ${a.nombre} ${a.apellido}:`)
-                    if (desc) {
-                      await supabase.from('participaciones').insert({ alumno_id: a.id, fecha, tipo: 'Participación', descripcion: desc })
-                      alert('¡Participación registrada!')
-                    }
-                  }}
+            {alumnos.map((a) => {
+              const valor = conteos[a.id] || 0
+              return (
+                <li
+                  key={a.id}
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    backgroundColor: '#2563eb',
-                    color: '#ffffff',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
+                    padding: '12px 14px',
+                    marginBottom: '8px',
+                    backgroundColor: '#1e293b',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    border: '1px solid #334155'
                   }}
                 >
-                  + Agregar Nota
-                </button>
-              </li>
-            ))}
+                  <span style={{ fontWeight: '500' }}>{a.apellido}, {a.nombre}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                      onClick={() => cambiarConteo(a.id, -1)}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '6px',
+                        backgroundColor: '#dc2626',
+                        color: '#ffffff',
+                        border: 'none',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      -
+                    </button>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold', minWidth: '30px', textAlign: 'center', color: valor < 0 ? '#fca5a5' : valor > 0 ? '#86efac' : '#ffffff' }}>
+                      {valor}
+                    </span>
+                    <button
+                      onClick={() => cambiarConteo(a.id, 1)}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '6px',
+                        backgroundColor: '#16a34a',
+                        color: '#ffffff',
+                        border: 'none',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -524,7 +489,7 @@ export default function Home() {
                 <ul style={{ paddingLeft: '20px' }}>
                   {historialAlumno.map((h, index) => (
                     <li key={index} style={{ marginBottom: '8px', color: '#e2e8f0' }}>
-                      <strong>{h.fecha}</strong> - {h.tipo_reg}: {h.estado || h.descripcion}
+                      <strong>{h.fecha}</strong> - {h.tipo_reg}: <strong>{h.detalle}</strong>
                     </li>
                   ))}
                 </ul>
