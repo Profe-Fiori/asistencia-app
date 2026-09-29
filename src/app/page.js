@@ -139,11 +139,15 @@ export default function Home() {
       fecha,
       estado,
     }))
-    const { error } = await supabase.from('asistencias').insert(registros)
+    
+    const { error } = await supabase
+      .from('asistencias')
+      .upsert(registros, { onConflict: ['alumno_id', 'fecha'] })
+
     if (error) {
       alert('Error al guardar asistencias: ' + error.message)
     } else {
-      alert('¡Asistencias guardadas exitosamente!')
+      alert('¡Asistencias guardadas/actualizadas exitosamente!')
       setPestaña('resumen')
     }
   }
