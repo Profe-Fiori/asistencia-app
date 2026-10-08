@@ -14,9 +14,16 @@ export default function Home() {
   const [conteos, setConteos] = useState({}) 
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [pestaña, setPestaña] = useState('asistencia')
+  
+  // Estados para Registro de Clases
+  const [contenidoClase, setContenidoClase] = useState('')
+  const [actividadesClase, setActividadesClase] = useState('')
+  const [obsClase, setObsClase] = useState('')
+
+  // Estados para Calificaciones y Alumno Informe
+  const [calificacionesCurso, setCalificacionesCurso] = useState({})
   const [alumnoInforme, setAlumnoInforme] = useState(null)
-  const [historialAlumno, setHistorialAlumno] = useState([])
-  const [totalParticipacionesAlumno, setTotalParticipacionesAlumno] = useState(0)
+  const [datosInformeDetallado, setDatosInformeDetallado] = useState({ asistencias: [], inasistencias: 0, porcentaje: 100, totalPos: 0, totalNeg: 0, balance: 0, notas: [], historialClases: [] })
   const [resumenFecha, setResumenFecha] = useState([])
 
   const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
@@ -59,6 +66,22 @@ export default function Home() {
           mapaConteos[a.id] = encontrado ? encontrado.cantidad : 0
         })
         setConteos(mapaConteos)
+
+        // Cargar calificaciones de los alumnos del curso
+        const alumnoIds = alms.map(a => a.id)
+        if (alumnoIds.length > 0) {
+          const { data: cals } = await supabase
+            .from('calificaciones')
+            .select('*')
+            .in('alumno_id', alumnoIds)
+          
+          const mapaCals = {}
+          ;(cals || []).forEach(c => {
+            if (!mapaCals[c.alumno_id]) mapaCals[c.alumno_id] = {}
+            mapaCals[c.alumno_id][c.nucleo] = c
+          })
+          setCalificacionesCurso(mapaCals)
+        }
       }
     }
     cargarDatosCurso()
@@ -73,9 +96,7 @@ export default function Home() {
           .eq('fecha', fecha)
           .eq('alumnos.curso_id', cursoSeleccionado)
 
-        if (data) {
-          setResumenFecha(data)
-        }
+        if (data) setResumenFecha(data)
       }
       cargarResumenPorFecha()
     }
@@ -91,7 +112,6 @@ export default function Home() {
   const cambiarConteo = async (alumno_id, delta) => {
     const valorActual = conteos[alumno_id] || 0
     const nuevoValor = valorActual + delta
-
     setConteos((prev) => ({ ...prev, [alumno_id]: nuevoValor }))
 
     await supabase
@@ -121,13 +141,51 @@ export default function Home() {
     }
   }
 
+  const guardarClase = async () => {
+    const { error } = await supabase.from('clases').insert([
+      { curso_id: cursoSeleccionado, fecha, contenido: contenidoClase, actividades: actividadesClase, observaciones: obsClase }
+    ])
+    if (error) {
+      alert('Error al guardar la clase: ' + error.message)
+    } else {
+      alert('¡Registro de clase guardado con éxito!')
+      setContenidoClase('')
+      setActividadesClase('')
+      setObsClase('')
+    }
+  }
+
+  const actualizarCalificacion = async (alumno_id, nucleo, campo, valor) => {
+    const actual = calificacionesCurso[alumno_id]?.[nucleo] || { alumno_id, nucleo, nota_regular: null, recu_1: null, recu_2: null, nota_trabajos: null, nota_final: null }
+    const actualizado = { ...actual, [campo]: valor === '' ? null : Number(valor) }
+
+    setCalificacionesCurso(prev => ({
+      ...prev,
+      [alumno_id]: {
+        ...(prev[alumno_id] || {}),
+        [nucleo]: actualizado
+      }
+    }))
+
+    await supabase.from('calificaciones').upsert(
+      { alumno_id, nucleo, ...actualizado },
+      { onConflict: ['alumno_id', 'nucleo'] }
+    )
+  }
+
   const exportarACSV = (tipo) => {
     let csvContent = "data:text/csv;charset=utf-8,"
     if (tipo === 'asistencia') {
       csvContent += "Apellido,Nombre,Estado,Fecha\n"
-      resumenFecha.forEach((r) => {
-        csvContent += `"${r.alumnos.apellido}","${r.alumnos.nombre}","${r.estado}","${fecha}"\n`
-      })
+      if (resumenFecha.length > 0) {
+        resumenFecha.forEach((r) => {
+          csvContent += `"${r.alumnos.apellido}","${r.alumnos.nombre}","${r.estado}","${fecha}"\n`
+        })
+      } else {
+        alumnos.forEach((a) => {
+          csvContent += `"${a.apellido}","${a.nombre}","${asistencias[a.id] || 'PENDIENTE'}","${fecha}"\n`
+        })
+      }
     } else {
       csvContent += "Apellido,Nombre,Participaciones,Fecha\n"
       alumnos.forEach((a) => {
@@ -145,63 +203,57 @@ export default function Home() {
     document.body.removeChild(link)
   }
 
-  const cargarInformeAlumno = async (alumno) => {
+  const cargarInformeAlumnoCompleto = async (alumno) => {
     setAlumnoInforme(alumno)
     const { data: asis } = await supabase.from('asistencias').select('*').eq('alumno_id', alumno.id)
     const { data: conts } = await supabase.from('conteo_participaciones').select('*').eq('alumno_id', alumno.id)
+    const { data: cals } = await supabase.from('calificaciones').select('*').eq('alumno_id', alumno.id)
+    const { data: clss } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado)
 
-    const totalPuntos = (conts || []).reduce((acc, curr) => acc + curr.cantidad, 0)
-    setTotalParticipacionesAlumno(totalPuntos)
+    const totalAsis = (asis || []).filter(a => a.estado === 'PRESENTE').length
+    const totalInas = (asis || []).filter(a => a.estado === 'AUSENTE').length
+    const totalClasesReg = (asis || []).length
+    const porcentaje = totalClasesReg > 0 ? Math.round((totalAsis / totalClasesReg) * 100) : 100
 
-    setHistorialAlumno([
-      ...(asis || []).map((a) => ({ fecha: a.fecha, tipo_reg: 'Asistencia', detalle: a.estado })),
-      ...(conts || []).map((c) => ({ fecha: c.fecha, tipo_reg: 'Participaciones (Día)', detalle: c.cantidad })),
-    ])
+    const totalPos = (conts || []).reduce((acc, curr) => acc + (curr.cantidad > 0 ? curr.cantidad : 0), 0)
+    const totalNeg = (conts || []).reduce((acc, curr) => acc + (curr.cantidad < 0 ? Math.abs(curr.cantidad) : 0), 0)
+    const balance = totalPos - totalNeg
+
+    setDatosInformeDetallado({
+      asistencias: asis || [],
+      inasistencias: totalInas,
+      porcentaje,
+      totalPos,
+      totalNeg,
+      balance,
+      notas: cals || [],
+      historialClases: clss || []
+    })
   }
 
   if (!autenticado) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
-        <img 
-          src={logoSrc} 
-          alt="Logo Profe Fiori" 
-          style={{ width: '130px', height: '130px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #3b82f6', marginBottom: '20px', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)' }} 
-        />
+        <img src={logoSrc} alt="Logo" style={{ width: '130px', height: '130px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #3b82f6', marginBottom: '20px' }} />
         <h1 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '5px', textAlign: 'center' }}>PROFESOR FIORI NICOLAS</h1>
         <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '25px' }}>Panel Exclusivo de Administración</p>
         
         <form 
           onSubmit={(e) => {
             e.preventDefault()
-            if (passwordInput === 'profe2026') {
-              setAutenticado(true)
-            } else {
-              alert('Contraseña incorrecta')
-            }
+            if (passwordInput === 'profe2026') setAutenticado(true)
+            else alert('Contraseña incorrecta')
           }}
           style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '300px', gap: '12px' }}
         >
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <input
-              type={mostrarPassword ? 'text' : 'password'}
-              placeholder="Ingrese su contraseña"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              style={{ width: '100%', padding: '14px', paddingRight: '45px', borderRadius: '8px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', fontSize: '16px', textAlign: 'center' }}
-            />
-            <button
-              type="button"
-              onClick={() => setMostrarPassword(!mostrarPassword)}
-              style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '18px' }}
-            >
-              {mostrarPassword ? '👁️' : '👁️‍🗨️'}
-            </button>
-          </div>
-
-          <button
-            type="submit"
-            style={{ padding: '14px', borderRadius: '8px', backgroundColor: '#2563eb', color: '#ffffff', fontWeight: 'bold', border: 'none', fontSize: '16px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)' }}
-          >
+          <input
+            type={mostrarPassword ? 'text' : 'password'}
+            placeholder="Contraseña"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            style={{ width: '100%', padding: '14px', borderRadius: '8px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', fontSize: '16px', textAlign: 'center' }}
+          />
+          <button type="submit" style={{ padding: '14px', borderRadius: '8px', backgroundColor: '#2563eb', color: '#ffffff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
             Ingresar al Panel
           </button>
         </form>
@@ -210,17 +262,11 @@ export default function Home() {
   }
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '800px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
+    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
-        <img 
-          src={logoSrc} 
-          alt="Logo" 
-          style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #3b82f6' }} 
-        />
-        <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '20px', margin: 0 }}>
-          PROFESOR FIORI NICOLAS
-        </h1>
+        <img src={logoSrc} alt="Logo" style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #3b82f6' }} />
+        <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '20px', margin: 0 }}>PROFESOR FIORI NICOLAS</h1>
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -229,11 +275,8 @@ export default function Home() {
           onChange={(e) => setCursoSeleccionado(e.target.value)}
           style={{ padding: '12px', borderRadius: '8px', fontSize: '15px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', flex: '1', minWidth: '180px' }}
         >
-          {cursos.map((c) => (
-            <option key={c.id} value={c.id}>{c.nombre}</option>
-          ))}
+          {cursos.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
         </select>
-
         <input
           type="date"
           value={fecha}
@@ -242,31 +285,17 @@ export default function Home() {
         />
       </div>
 
+      {/* Menú de Pestañas Ampliado */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setPestaña('asistencia')}
-          style={{ padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#ffffff', border: pestaña === 'asistencia' ? '2px solid #60a5fa' : '1px solid #334155', fontWeight: 'bold', flex: 1, minWidth: '95px' }}
-        >
-          Tomar
-        </button>
-        <button
-          onClick={() => setPestaña('resumen')}
-          style={{ padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#ffffff', border: pestaña === 'resumen' ? '2px solid #60a5fa' : '1px solid #334155', fontWeight: 'bold', flex: 1, minWidth: '95px' }}
-        >
-          Ver Asistencia
-        </button>
-        <button
-          onClick={() => setPestaña('participacion')}
-          style={{ padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#ffffff', border: pestaña === 'participacion' ? '2px solid #60a5fa' : '1px solid #334155', fontWeight: 'bold', flex: 1, minWidth: '95px' }}
-        >
-          Participaciones
-        </button>
-        <button
-          onClick={() => setPestaña('informe')}
-          style={{ padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', backgroundColor: pestaña === 'informe' ? '#2563eb' : '#1e293b', color: '#ffffff', border: pestaña === 'informe' ? '2px solid #60a5fa' : '1px solid #334155', fontWeight: 'bold', flex: 1, minWidth: '95px' }}
-        >
-          Informes
-        </button>
+        {['asistencia', 'resumen', 'participacion', 'clases', 'calificaciones', 'informe'].map((p) => (
+          <button
+            key={p}
+            onClick={() => setPestaña(p)}
+            style={{ padding: '10px 10px', borderRadius: '8px', cursor: 'pointer', backgroundColor: pestaña === p ? '#2563eb' : '#1e293b', color: '#ffffff', border: pestaña === p ? '2px solid #60a5fa' : '1px solid #334155', fontWeight: 'bold', fontSize: '13px', textTransform: 'capitalize', flex: 1, minWidth: '85px' }}
+          >
+            {p === 'resumen' ? 'Ver Asis' : p}
+          </button>
+        ))}
       </div>
 
       {pestaña === 'asistencia' && (
@@ -285,11 +314,7 @@ export default function Home() {
               </li>
             ))}
           </ul>
-
-          <button
-            onClick={guardarAsistencias}
-            style={{ width: '100%', padding: '16px', marginTop: '20px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}
-          >
+          <button onClick={guardarAsistencias} style={{ width: '100%', padding: '16px', marginTop: '20px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>
             Guardar Lista del Día
           </button>
         </div>
@@ -298,43 +323,29 @@ export default function Home() {
       {pestaña === 'resumen' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ color: '#93c5fd', margin: 0 }}>Asistencia del día: {fecha}</h3>
-            {resumenFecha.length > 0 && (
-              <button
-                onClick={() => exportarACSV('asistencia')}
-                style={{ padding: '8px 12px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
-              >
-                📥 Descargar Excel
-              </button>
-            )}
+            <h3 style={{ color: '#93c5fd', margin: 0 }}>Asistencia - {fecha}</h3>
+            <button onClick={() => exportarACSV('asistencia')} style={{ padding: '8px 12px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>
+              📥 Descargar Excel
+            </button>
           </div>
-          {resumenFecha.length === 0 ? (
-            <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', textAlign: 'center', border: '1px solid #334155' }}>
-              <p style={{ color: '#94a3b8' }}>No hay registros guardados para este curso en la fecha seleccionada.</p>
-            </div>
-          ) : (
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-              {resumenFecha.map((r, index) => (
-                <li key={index} style={{ padding: '12px 14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
-                  <span style={{ fontWeight: '500' }}>{r.alumnos.apellido}, {r.alumnos.nombre}</span>
-                  <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: r.estado === 'PRESENTE' ? '#16a34a' : '#dc2626', color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }}>
-                    {r.estado}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {resumenFecha.map((r, index) => (
+              <li key={index} style={{ padding: '12px 14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                <span style={{ fontWeight: '500' }}>{r.alumnos.apellido}, {r.alumnos.nombre}</span>
+                <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: r.estado === 'PRESENTE' ? '#16a34a' : '#dc2626', color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }}>
+                  {r.estado}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
       {pestaña === 'participacion' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ color: '#93c5fd', margin: 0 }}>Contador de Participaciones - {fecha}</h3>
-            <button
-              onClick={() => exportarACSV('participacion')}
-              style={{ padding: '8px 12px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
-            >
+            <h3 style={{ color: '#93c5fd', margin: 0 }}>Contador de Puntos - {fecha}</h3>
+            <button onClick={() => exportarACSV('participacion')} style={{ padding: '8px 12px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>
               📥 Descargar Excel
             </button>
           </div>
@@ -356,47 +367,125 @@ export default function Home() {
         </div>
       )}
 
+      {/* REGISTRO DE CLASES */}
+      {pestaña === 'clases' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>Bitácora / Registro de Clase - {fecha}</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Contenido Trabajado:</label>
+              <input type="text" value={contenidoClase} onChange={(e) => setContenidoClase(e.target.value)} placeholder="Ej: Capacidades condicionales" style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Actividades:</label>
+              <textarea value={actividadesClase} onChange={(e) => setActividadesClase(e.target.value)} placeholder="Detalle de ejercicios o estaciones..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px', height: '80px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Observaciones de la Clase:</label>
+              <input type="text" value={obsClase} onChange={(e) => setObsClase(e.target.value)} placeholder="Ej: Muy buena predisposición del grupo" style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px' }} />
+            </div>
+            <button onClick={guardarClase} style={{ padding: '12px', backgroundColor: '#2563eb', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: '10px' }}>
+              Guardar Registro de Clase
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CALIFICACIONES (Núcleos 1 al 6 + Recuperatorios) */}
+      {pestaña === 'calificaciones' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>Calificaciones por Núcleos (1 al 6)</h3>
+          {alumnos.map((a) => (
+            <div key={a.id} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', marginBottom: '15px', border: '1px solid #334155' }}>
+              <h4 style={{ color: '#60a5fa', marginBottom: '10px' }}>{a.apellido}, {a.nombre}</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[1, 2, 3, 4, 5, 6].map((nuc) => {
+                  const reg = calificacionesCurso[a.id]?.[nuc] || {}
+                  return (
+                    <div key={nuc} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '6px', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontWeight: 'bold', color: '#cbd5e1', minWidth: '70px' }}>Núcleo {nuc}</span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Reg:</span>
+                        <input type="number" step="0.1" value={reg.nota_regular ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} style={{ width: '50px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Rec1:</span>
+                        <input type="number" step="0.1" value={reg.recu_1 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} style={{ width: '50px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Rec2:</span>
+                        <input type="number" step="0.1" value={reg.recu_2 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_2', e.target.value)} style={{ width: '50px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Trab:</span>
+                        <input type="number" step="0.1" value={reg.nota_trabajos ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_trabajos', e.target.value)} style={{ width: '50px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '12px', color: '#60a5fa', fontWeight: 'bold' }}>Final:</span>
+                        <input type="number" step="0.1" value={reg.nota_final ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} style={{ width: '55px', padding: '4px', textAlign: 'center', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* INFORME COMPLETO DEL ALUMNO */}
       {pestaña === 'informe' && (
         <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Informe y Estadísticas por Alumno</h3>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Informe Completo por Alumno</h3>
           <select
             onChange={(e) => {
               const alum = alumnos.find((a) => a.id.toString() === e.target.value)
-              if (alum) cargarInformeAlumno(alum)
+              if (alum) cargarInformeAlumnoCompleto(alum)
             }}
             style={{ width: '100%', padding: '12px', borderRadius: '8px', fontSize: '16px', marginBottom: '20px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6' }}
           >
             <option value="">Seleccionar alumno...</option>
-            {alumnos.map((a) => (
-              <option key={a.id} value={a.id}>{a.apellido}, {a.nombre}</option>
-            ))}
+            {alumnos.map((a) => (<option key={a.id} value={a.id}>{a.apellido}, {a.nombre}</option>))}
           </select>
 
           {alumnoInforme && (
             <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
-              <h4 style={{ color: '#60a5fa', marginBottom: '15px' }}>Perfil de {alumnoInforme.nombre} {alumnoInforme.apellido}</h4>
+              <h4 style={{ color: '#60a5fa', marginBottom: '15px' }}>Legajo de {alumnoInforme.nombre} {alumnoInforme.apellido}</h4>
               
-              <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-                <div style={{ flex: 1, backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
-                  <span style={{ display: 'block', color: '#94a3b8', fontSize: '13px' }}>Puntos Acumulados</span>
-                  <span style={{ fontSize: '22px', fontWeight: 'bold', color: totalParticipacionesAlumno < 0 ? '#fca5a5' : '#86efac' }}>
-                    {totalParticipacionesAlumno}
-                  </span>
+              {/* Tarjetas de Resumen Estadístico */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+                  <span style={{ display: 'block', color: '#94a3b8', fontSize: '12px' }}>Presentismo</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#86efac' }}>{datosInformeDetallado.porcentaje}%</span>
+                </div>
+                <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+                  <span style={{ display: 'block', color: '#94a3b8', fontSize: '12px' }}>Inasistencias</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#fca5a5' }}>{datosInformeDetallado.inasistencias}</span>
+                </div>
+                <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+                  <span style={{ display: 'block', color: '#94a3b8', fontSize: '12px' }}>Ptos (+) / (-)</span>
+                  <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#60a5fa' }}>+{datosInformeDetallado.totalPos} / -{datosInformeDetallado.totalNeg}</span>
+                </div>
+                <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+                  <span style={{ display: 'block', color: '#94a3b8', fontSize: '12px' }}>Balance Puntos</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: datosInformeDetallado.balance < 0 ? '#fca5a5' : '#86efac' }}>{datosInformeDetallado.balance}</span>
                 </div>
               </div>
 
-              <h5 style={{ color: '#cbd5e1', marginBottom: '10px' }}>Historial de Registros:</h5>
-              {historialAlumno.length === 0 ? (
-                <p style={{ color: '#94a3b8' }}>No hay registros guardados aún para este alumno.</p>
-              ) : (
-                <ul style={{ paddingLeft: '20px' }}>
-                  {historialAlumno.map((h, index) => (
-                    <li key={index} style={{ marginBottom: '6px', color: '#e2e8f0', fontSize: '14px' }}>
-                      <strong>{h.fecha}</strong> - {h.tipo_reg}: <strong>{h.detalle}</strong>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <h5 style={{ color: '#cbd5e1', marginBottom: '8px' }}>Calificaciones por Núcleos:</h5>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '15px' }}>
+                {datosInformeDetallado.notas.length === 0 ? (
+                  <p style={{ color: '#94a3b8', fontSize: '13px' }}>Sin calificaciones cargadas aún.</p>
+                ) : (
+                  datosInformeDetallado.notas.map((n) => (
+                    <div key={n.id} style={{ backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '6px', fontSize: '13px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span><strong>Núcleo {n.nucleo}</strong> (Trabajos: {n.nota_trabajos ?? '-'})</span>
+                      <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>Nota Final: {n.nota_final ?? 'Sin cerrar'}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <h5 style={{ color: '#cbd5e1', marginBottom: '8px' }}>Historial de Clases del Curso:</h5>
+              <ul style={{ paddingLeft: '18px', fontSize: '13px', color: '#cbd5e1' }}>
+                {datosInformeDetallado.historialClases.map((cls) => (
+                  <li key={cls.id} style={{ marginBottom: '5px' }}>
+                    <strong>{cls.fecha}</strong>: {cls.contenido || 'Sin contenido'}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
