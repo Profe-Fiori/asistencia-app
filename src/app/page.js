@@ -15,16 +15,19 @@ export default function Home() {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [pestaña, setPestaña] = useState('asistencia')
   
-  // Estados para Registro de Clases
+  // Estados para Registro de Clases y Cierre
   const [contenidoClase, setContenidoClase] = useState('')
   const [actividadesClase, setActividadesClase] = useState('')
   const [obsClase, setObsClase] = useState('')
 
-  // Estados para Calificaciones y Alumno Informe
+  // Estados para Calificaciones e Informes
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
   const [alumnoInforme, setAlumnoInforme] = useState(null)
   const [datosInformeDetallado, setDatosInformeDetallado] = useState({ asistencias: [], inasistencias: 0, porcentaje: 100, totalPos: 0, totalNeg: 0, balance: 0, notas: [], historialClases: [] })
   const [resumenFecha, setResumenFecha] = useState([])
+
+  // Estado para Informe Colectivo del Curso
+  const [estadisticasCurso, setEstadisticasCurso] = useState({ promedioAsistencia: 100, pibesEnAlerta: [], pibesDestacados: [], pibesEnNegativo: [] })
 
   const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
 
@@ -52,7 +55,7 @@ export default function Home() {
       if (alms) {
         setAlumnos(alms)
         const inicialesAsis = {}
-        alms.forEach((a) => (inicialesAsis[a.id] = 'PENDIENTE'))
+        alms.forEach((a) => (inicialesAsis[a.id] = 'PRESENTE'))
         setAsistencias(inicialesAsis)
 
         const { data: conts } = await supabase
@@ -67,7 +70,6 @@ export default function Home() {
         })
         setConteos(mapaConteos)
 
-        // Cargar calificaciones de los alumnos del curso
         const alumnoIds = alms.map(a => a.id)
         if (alumnoIds.length > 0) {
           const { data: cals } = await supabase
@@ -99,6 +101,10 @@ export default function Home() {
         if (data) setResumenFecha(data)
       }
       cargarResumenPorFecha()
+    }
+
+    if (pestaña === 'informeCurso' && cursoSeleccionado && autenticado) {
+      calcularEstadisticasCurso()
     }
   }, [pestaña, fecha, cursoSeleccionado, autenticado])
 
@@ -141,18 +147,88 @@ export default function Home() {
     }
   }
 
-  const guardarClase = async () => {
+  // CIERRE DE CLASE AUTOMÁTICO (Guarda Asistencia + Puntos + Bitácora en un solo click)
+  const ejecutarCierreDeClase = async () => {
+    let cantPresentes = 0
+    let cantAusentes = 0
+    Object.values(asistencias).forEach(est => {
+      if (est === 'PRESENTE') cantPresentes++
+      else if (est === 'AUSENTE') cantAusentes++
+    })
+
+    let pos = 0
+    let neg = 0
+    Object.values(conteos).forEach(v => {
+      if (v > 0) pos += v
+      if (v < 0) neg += Math.abs(v)
+    })
+
+    // 1. Guardar Asistencias
+    const registrosAsis = Object.entries(asistencias).map(([alumno_id, estado]) => ({
+      alumno_id,
+      fecha,
+      estado,
+    }))
+    await supabase.from('asistencias').upsert(registrosAsis, { onConflict: ['alumno_id', 'fecha'] })
+
+    // 2. Guardar Bitácora de Clase
     const { error } = await supabase.from('clases').insert([
-      { curso_id: cursoSeleccionado, fecha, contenido: contenidoClase, actividades: actividadesClase, observaciones: obsClase }
+      { 
+        curso_id: cursoSeleccionado, 
+        fecha, 
+        contenido: contenidoClase || 'Clase regular', 
+        actividades: actividadesClase, 
+        observaciones: obsClase,
+        presentes: cantPresentes,
+        ausentes: cantAusentes,
+        puntos_pos: pos,
+        puntos_neg: neg
+      }
     ])
+
     if (error) {
-      alert('Error al guardar la clase: ' + error.message)
+      alert('Error al realizar el cierre: ' + error.message)
     } else {
-      alert('¡Registro de clase guardado con éxito!')
+      alert(`¡Cierre de Clase Exitoso!\n\n👥 ${cantPresentes} Presentes | ❌ ${cantAusentes} Ausentes\n➕ ${pos} Puntos Positivos | ➖ ${neg} Puntos Negativos`)
       setContenidoClase('')
       setActividadesClase('')
       setObsClase('')
+      setPestaña('informeCurso')
     }
+  }
+
+  const calcularEstadisticasCurso = async () => {
+    const alumnoIds = alumnos.map(a => a.id)
+    if (alumnoIds.length === 0) return
+
+    const { data: todasAsis } = await supabase.from('asistencias').select('*').in('alumno_id', alumnoIds)
+    const { data: todosConts } = await supabase.from('conteo_participaciones').select('*').in('alumno_id', alumnoIds)
+
+    let sumaPorcentajes = 0
+    const alertas = []
+    const destacados = []
+    const negativos = []
+
+    alumnos.forEach(alm => {
+      const asisAlm = (todasAsis || []).filter(a => a.alumno_id === alm.id)
+      const inasistencias = asisAlm.filter(a => a.estado === 'AUSENTE').length
+      const totalClases = asisAlm.length
+      const pct = totalClases > 0 ? ((totalClases - inasistencias) / totalClases) * 100 : 100
+      sumaPorcentajes += pct
+
+      if (inasistencias >= 5 || pct < 75) {
+        alertas.push({ nombre: `${alm.apellido}, ${alm.nombre}`, inasistencias, pct: Math.round(pct) })
+      }
+
+      const contsAlm = (todosConts || []).filter(c => c.alumno_id === alm.id)
+      const balance = contsAlm.reduce((acc, curr) => acc + curr.cantidad, 0)
+
+      if (balance >= 5) destacados.push({ nombre: `${alm.apellido}, ${alm.nombre}`, balance })
+      if (balance < 0) negativos.push({ nombre: `${alm.apellido}, ${alm.nombre}`, balance })
+    })
+
+    const prom = alumnos.length > 0 ? Math.round(sumaPorcentajes / alumnos.length) : 100
+    setEstadisticasCurso({ promedioAsistencia: prom, pibesEnAlerta: alertas, pibesDestacados: destacados, pibesEnNegativo: negativos })
   }
 
   const actualizarCalificacion = async (alumno_id, nucleo, campo, valor) => {
@@ -183,7 +259,7 @@ export default function Home() {
         })
       } else {
         alumnos.forEach((a) => {
-          csvContent += `"${a.apellido}","${a.nombre}","${asistencias[a.id] || 'PENDIENTE'}","${fecha}"\n`
+          csvContent += `"${a.apellido}","${a.nombre}","${asistencias[a.id] || 'PRESENTE'}","${fecha}"\n`
         })
       }
     } else {
@@ -285,17 +361,15 @@ export default function Home() {
         />
       </div>
 
-      {/* Menú de Pestañas Ampliado */}
+      {/* Menú de Pestañas con Cierre y Reporte Colectivo */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {['asistencia', 'resumen', 'participacion', 'clases', 'calificaciones', 'informe'].map((p) => (
-          <button
-            key={p}
-            onClick={() => setPestaña(p)}
-            style={{ padding: '10px 10px', borderRadius: '8px', cursor: 'pointer', backgroundColor: pestaña === p ? '#2563eb' : '#1e293b', color: '#ffffff', border: pestaña === p ? '2px solid #60a5fa' : '1px solid #334155', fontWeight: 'bold', fontSize: '13px', textTransform: 'capitalize', flex: 1, minWidth: '85px' }}
-          >
-            {p === 'resumen' ? 'Ver Asis' : p}
-          </button>
-        ))}
+        <button onClick={() => setPestaña('asistencia')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '75px' }}>Tomar</button>
+        <button onClick={() => setPestaña('resumen')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '75px' }}>Ver Asis</button>
+        <button onClick={() => setPestaña('participacion')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '75px' }}>Puntos</button>
+        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '85px' }}>⚡ Cierre</button>
+        <button onClick={() => setPestaña('calificaciones')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '75px' }}>Notas</button>
+        <button onClick={() => setPestaña('informe')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'informe' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '75px' }}>Alumno</button>
+        <button onClick={() => setPestaña('informeCurso')} style={{ padding: '10px', borderRadius: '8px', backgroundColor: pestaña === 'informeCurso' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '12px', flex: 1, minWidth: '85px' }}>📊 Curso</button>
       </div>
 
       {pestaña === 'asistencia' && (
@@ -309,7 +383,7 @@ export default function Home() {
                   onClick={() => toggleEstado(a.id)}
                   style={{ padding: '8px 16px', borderRadius: '6px', backgroundColor: asistencias[a.id] === 'PRESENTE' ? '#2563eb' : '#64748b', color: '#ffffff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
                 >
-                  {asistencias[a.id] || 'PENDIENTE'}
+                  {asistencias[a.id] || 'PRESENTE'}
                 </button>
               </li>
             ))}
@@ -367,31 +441,98 @@ export default function Home() {
         </div>
       )}
 
-      {/* REGISTRO DE CLASES */}
-      {pestaña === 'clases' && (
+      {/* CIERRE DE CLASE AUTOMÁTICO */}
+      {pestaña === 'cierreClase' && (
         <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
-          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>Bitácora / Registro de Clase - {fecha}</h3>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>⚡ Cierre y Resumen de Clase - {fecha}</h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Presentes / Ausentes</span>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac' }}>
+                {Object.values(asistencias).filter(e => e === 'PRESENTE').length} ✅ / {Object.values(asistencias).filter(e => e === 'AUSENTE').length} ❌
+              </span>
+            </div>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Puntos Otorgados</span>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#60a5fa' }}>
+                +{Object.values(conteos).filter(v => v > 0).reduce((a,b)=>a+b,0)} / -{Object.values(conteos).filter(v => v < 0).reduce((a,b)=>a+Math.abs(b),0)}
+              </span>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Contenido Trabajado:</label>
-              <input type="text" value={contenidoClase} onChange={(e) => setContenidoClase(e.target.value)} placeholder="Ej: Capacidades condicionales" style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px' }} />
+              <input type="text" value={contenidoClase} onChange={(e) => setContenidoClase(e.target.value)} placeholder="Ej: Capacidades condicionales / Vóley" style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px' }} />
             </div>
             <div>
-              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Actividades:</label>
-              <textarea value={actividadesClase} onChange={(e) => setActividadesClase(e.target.value)} placeholder="Detalle de ejercicios o estaciones..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px', height: '80px' }} />
+              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Actividades Realizadas:</label>
+              <textarea value={actividadesClase} onChange={(e) => setActividadesClase(e.target.value)} placeholder="Ej: Estaciones de resistencia y saques..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px', height: '70px' }} />
             </div>
             <div>
-              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Observaciones de la Clase:</label>
-              <input type="text" value={obsClase} onChange={(e) => setObsClase(e.target.value)} placeholder="Ej: Muy buena predisposición del grupo" style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px' }} />
+              <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Observaciones del Día:</label>
+              <input type="text" value={obsClase} onChange={(e) => setObsClase(e.target.value)} placeholder="Ej: Excelente predisposición del grupo" style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', marginTop: '5px' }} />
             </div>
-            <button onClick={guardarClase} style={{ padding: '12px', backgroundColor: '#2563eb', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: '10px' }}>
-              Guardar Registro de Clase
+
+            <button onClick={ejecutarCierreDeClase} style={{ padding: '16px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '10px', fontSize: '16px', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.4)' }}>
+              🔒 Confirmar y Guardar Todo el Cierre
             </button>
           </div>
         </div>
       )}
 
-      {/* CALIFICACIONES (Núcleos 1 al 6 + Recuperatorios) */}
+      {/* TABLERO DE INFORMES DEL CURSO */}
+      {pestaña === 'informeCurso' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📊 Estadísticas Colectivas del Curso</h3>
+          
+          <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', textAlign: 'center', marginBottom: '20px', border: '1px solid #334155' }}>
+            <span style={{ color: '#94a3b8', fontSize: '13px', display: 'block' }}>Presentismo Promedio del Curso</span>
+            <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#86efac' }}>{estadisticasCurso.promedioAsistencia}%</span>
+          </div>
+
+          <h4 style={{ color: '#fca5a5', marginBottom: '10px' }}>⚠️ Alumnos en Alerta (Inasistencias &lt; 75% o &gt;= 5 faltas):</h4>
+          {estadisticasCurso.pibesEnAlerta.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '15px' }}>Sin alumnos en situación crítica de inasistencias.</p>
+          ) : (
+            <ul style={{ paddingLeft: '18px', marginBottom: '15px' }}>
+              {estadisticasCurso.pibesEnAlerta.map((p, idx) => (
+                <li key={idx} style={{ color: '#fca5a5', fontSize: '14px', marginBottom: '4px' }}>
+                  <strong>{p.nombre}</strong> — {p.inasistencias} Inasistencias ({p.pct}% Asist)
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h4 style={{ color: '#86efac', marginBottom: '10px' }}>🌟 Alumnos Destacados (Balance Puntos &gt;= +5):</h4>
+          {estadisticasCurso.pibesDestacados.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '15px' }}>Sin alumnos destacados aún en puntos.</p>
+          ) : (
+            <ul style={{ paddingLeft: '18px', marginBottom: '15px' }}>
+              {estadisticasCurso.pibesDestacados.map((p, idx) => (
+                <li key={idx} style={{ color: '#86efac', fontSize: '14px', marginBottom: '4px' }}>
+                  <strong>{p.nombre}</strong> — Balance: +{p.balance}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h4 style={{ color: '#fca5a5', marginBottom: '10px' }}>🔻 Alumnos con Balance Negativo:</h4>
+          {estadisticasCurso.pibesEnNegativo.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '13px' }}>Ningún alumno con balance negativo.</p>
+          ) : (
+            <ul style={{ paddingLeft: '18px' }}>
+              {estadisticasCurso.pibesEnNegativo.map((p, idx) => (
+                <li key={idx} style={{ color: '#fca5a5', fontSize: '14px', marginBottom: '4px' }}>
+                  <strong>{p.nombre}</strong> — Balance: {p.balance}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {pestaña === 'calificaciones' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>Calificaciones por Núcleos (1 al 6)</h3>
@@ -425,7 +566,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* INFORME COMPLETO DEL ALUMNO */}
       {pestaña === 'informe' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Informe Completo por Alumno</h3>
@@ -444,7 +584,6 @@ export default function Home() {
             <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
               <h4 style={{ color: '#60a5fa', marginBottom: '15px' }}>Legajo de {alumnoInforme.nombre} {alumnoInforme.apellido}</h4>
               
-              {/* Tarjetas de Resumen Estadístico */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px', marginBottom: '20px' }}>
                 <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
                   <span style={{ display: 'block', color: '#94a3b8', fontSize: '12px' }}>Presentismo</span>
