@@ -498,4 +498,4 @@ export default function Home() {
 
       {/* Selectors */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <se
+        <sel
