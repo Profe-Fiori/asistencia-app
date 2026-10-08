@@ -36,7 +36,7 @@ export default function Home() {
   const [nuevoAnuncioAdmin, setNuevoAnuncioAdmin] = useState('')
   const [listaProfesAdmin, setListaProfesAdmin] = useState([])
 
-  const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
+  const logoSrc = "/icon.png"
   const MI_WHATSAPP = "5493510000000"
 
   useEffect(() => {
@@ -344,7 +344,7 @@ export default function Home() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
         <img src={logoSrc} alt="Logo" style={{ width: '110px', height: '110px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #3b82f6', marginBottom: '15px' }} />
         <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '5px' }}>PROFE FIORI APP</h1>
-        <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '25px' }}>Gestión para Profesores de Educación Física</p>
+        <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '25px' }}>Gestión para Profesores</p>
 
         <form onSubmit={handleAuth} style={{ width: '100%', maxWidth: '340px', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#1e293b', padding: '25px', borderRadius: '12px', border: '1px solid #334155' }}>
           {modoAuth === 'registro' && (
@@ -390,8 +390,8 @@ export default function Home() {
         <button onClick={cerrarSesion} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>Cerrar Sesión</button>
       </div>
     )
-                                                                   }
-                return (
+        }
+            return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
       {anuncioActivo && (
@@ -624,4 +624,4 @@ export default function Home() {
     </div>
   )
         }
-      
+                      
