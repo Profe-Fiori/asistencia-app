@@ -7,13 +7,13 @@ export default function Home() {
   const [perfil, setPerfil] = useState(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
 
-  // Estados de Auth
-  const [modoAuth, setModoAuth] = useState('login') // 'login' o 'registro'
+  // Auth States
+  const [modoAuth, setModoAuth] = useState('login')
   const [emailInput, setEmailInput] = useState('')
   const [passInput, setPassInput] = useState('')
   const [nombreInput, setNombreInput] = useState('')
 
-  // Datos principales
+  // App Data
   const [cursos, setCursos] = useState([])
   const [cursoSeleccionado, setCursoSeleccionado] = useState('')
   const [alumnos, setAlumnos] = useState([])
@@ -34,19 +34,19 @@ export default function Home() {
   const [resumenFecha, setResumenFecha] = useState([])
   const [estadisticasCurso, setEstadisticasCurso] = useState({ promedioAsistencia: 100, pibesEnAlerta: [], pibesDestacados: [], pibesEnNegativo: [] })
 
-  // Gestión de Cursos y Alumnos (Límites)
+  // Gestión de Cursos y Alumnos
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('')
   const [textoCargaMasiva, setTextoCargaMasiva] = useState('')
 
-  // Anuncio Admin
+  // Admin
   const [anuncioActivo, setAnuncioActivo] = useState('')
   const [nuevoAnuncioAdmin, setNuevoAnuncioAdmin] = useState('')
   const [listaProfesAdmin, setListaProfesAdmin] = useState([])
 
   const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
-  const MI_WHATSAPP = "5493510000000" // Cambiá este número por el tuyo real con código de área
+  const MI_WHATSAPP = "5493510000000"
 
   // 1. Control de Sesión
   useEffect(() => {
@@ -86,7 +86,6 @@ export default function Home() {
     if (data && data.length > 0) setAnuncioActivo(data[0].mensaje)
   }
 
-  // Auth Functions
   const handleAuth = async (e) => {
     e.preventDefault()
     if (modoAuth === 'login') {
@@ -174,7 +173,27 @@ export default function Home() {
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
 
-  // Cargar Admin Data si sos Admin
+  // Cargar Resumen e Informes
+  useEffect(() => {
+    if (pestaña === 'resumen' && cursoSeleccionado && usuario) {
+      async function cargarResumenPorFecha() {
+        const { data } = await supabase
+          .from('asistencias')
+          .select('*, alumnos!inner(curso_id, apellido, nombre)')
+          .eq('fecha', fecha)
+          .eq('alumnos.curso_id', cursoSeleccionado)
+
+        if (data) setResumenFecha(data)
+      }
+      cargarResumenPorFecha()
+    }
+
+    if (pestaña === 'informeCurso' && cursoSeleccionado && usuario) {
+      calcularEstadisticasCurso()
+    }
+  }, [pestaña, fecha, cursoSeleccionado, usuario])
+
+  // Admin Data
   useEffect(() => {
     if (perfil?.rol === 'admin' && pestaña === 'adminPanel') {
       cargarProfesAdmin()
@@ -206,10 +225,10 @@ export default function Home() {
     alert('Anuncio publicado a todos los profes')
   }
 
-  // Gestión de Cursos y Alumnos
+  // Cursos y Alumnos
   const crearCurso = async () => {
     if (cursos.length >= 20 && perfil?.rol !== 'admin') {
-      alert('Has alcanzado el límite de 20 cursos en tu plan.')
+      alert('Has alcanzado el límite de 20 cursos.')
       return
     }
     if (!nuevoCursoNombre.trim()) return
@@ -234,7 +253,7 @@ export default function Home() {
 
   const agregarAlumnoIndividual = async () => {
     if (alumnos.length >= 60 && perfil?.rol !== 'admin') {
-      alert('Has alcanzado el límite de 60 alumnos para este curso.')
+      alert('Has alcanzado el límite de 60 alumnos.')
       return
     }
     if (!nuevoAlumnoApellido.trim() || !nuevoAlumnoNombre.trim()) return
@@ -252,7 +271,7 @@ export default function Home() {
   const procesarCargaMasiva = async () => {
     const lineas = textoCargaMasiva.split('\n').filter(l => l.trim() !== '')
     if (alumnos.length + lineas.length > 60 && perfil?.rol !== 'admin') {
-      alert(`No podés superar los 60 alumnos por curso. Actualmente tenés ${alumnos.length}.`)
+      alert(`No podés superar los 60 alumnos por curso.`)
       return
     }
 
@@ -286,7 +305,7 @@ export default function Home() {
     }
   }
 
-  // Funcionalidades de Lista
+  // Operaciones Lista
   const toggleEstado = (id) => {
     setAsistencias((prev) => ({
       ...prev,
@@ -374,6 +393,40 @@ export default function Home() {
     }
   }
 
+  const calcularEstadisticasCurso = async () => {
+    const alumnoIds = alumnos.map(a => a.id)
+    if (alumnoIds.length === 0) return
+
+    const { data: todasAsis } = await supabase.from('asistencias').select('*').in('alumno_id', alumnoIds)
+    const { data: todosConts } = await supabase.from('conteo_participaciones').select('*').in('alumno_id', alumnoIds)
+
+    let sumaPorcentajes = 0
+    const alertas = []
+    const destacados = []
+    const negativos = []
+
+    alumnos.forEach(alm => {
+      const asisAlm = (todasAsis || []).filter(a => a.alumno_id === alm.id)
+      const inasistencias = asisAlm.filter(a => a.estado === 'AUSENTE').length
+      const totalClases = asisAlm.length
+      const pct = totalClases > 0 ? ((totalClases - inasistencias) / totalClases) * 100 : 100
+      sumaPorcentajes += pct
+
+      if (inasistencias >= 5 || pct < 75) {
+        alertas.push({ nombre: `${alm.apellido}, ${alm.nombre}`, inasistencias, pct: Math.round(pct) })
+      }
+
+      const contsAlm = (todosConts || []).filter(c => c.alumno_id === alm.id)
+      const balance = contsAlm.reduce((acc, curr) => acc + curr.cantidad, 0)
+
+      if (balance >= 5) destacados.push({ nombre: `${alm.apellido}, ${alm.nombre}`, balance })
+      if (balance < 0) negativos.push({ nombre: `${alm.apellido}, ${alm.nombre}`, balance })
+    })
+
+    const prom = alumnos.length > 0 ? Math.round(sumaPorcentajes / alumnos.length) : 100
+    setEstadisticasCurso({ promedioAsistencia: prom, pibesEnAlerta: alertas, pibesDestacados: destacados, pibesEnNegativo: negativos })
+  }
+
   const actualizarCalificacion = async (alumno_id, nucleo, campo, valor) => {
     const actual = calificacionesCurso[alumno_id]?.[nucleo] || { alumno_id, nucleo, nota_regular: null, recu_1: null, recu_2: null, nota_trabajos: null, nota_final: null }
     const actualizado = { ...actual, [campo]: valor === '' ? null : Number(valor) }
@@ -392,6 +445,34 @@ export default function Home() {
     )
   }
 
+  const cargarInformeAlumnoCompleto = async (alumno) => {
+    setAlumnoInforme(alumno)
+    const { data: asis } = await supabase.from('asistencias').select('*').eq('alumno_id', alumno.id)
+    const { data: conts } = await supabase.from('conteo_participaciones').select('*').eq('alumno_id', alumno.id)
+    const { data: cals } = await supabase.from('calificaciones').select('*').eq('alumno_id', alumno.id)
+    const { data: clss } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado)
+
+    const totalAsis = (asis || []).filter(a => a.estado === 'PRESENTE').length
+    const totalInas = (asis || []).filter(a => a.estado === 'AUSENTE').length
+    const totalClasesReg = (asis || []).length
+    const porcentaje = totalClasesReg > 0 ? Math.round((totalAsis / totalClasesReg) * 100) : 100
+
+    const totalPos = (conts || []).reduce((acc, curr) => acc + (curr.cantidad > 0 ? curr.cantidad : 0), 0)
+    const totalNeg = (conts || []).reduce((acc, curr) => acc + (curr.cantidad < 0 ? Math.abs(curr.cantidad) : 0), 0)
+    const balance = totalPos - totalNeg
+
+    setDatosInformeDetallado({
+      asistencias: asis || [],
+      inasistencias: totalInas,
+      porcentaje,
+      totalPos,
+      totalNeg,
+      balance,
+      notas: cals || [],
+      historialClases: clss || []
+    })
+  }
+
   if (cargandoSesion) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', fontFamily: 'sans-serif' }}>
@@ -400,7 +481,6 @@ export default function Home() {
     )
   }
 
-  // PANTALLA DE LOGIN Y REGISTRO
   if (!usuario) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
@@ -429,58 +509,4 @@ export default function Home() {
           </button>
 
           <p onClick={() => setModoAuth(modoAuth === 'login' ? 'registro' : 'login')} style={{ fontSize: '13px', color: '#60a5fa', textAlign: 'center', cursor: 'pointer', marginTop: '10px', textDecoration: 'underline' }}>
-            {modoAuth === 'login' ? '¿No tenés cuenta? Registrate acá' : '¿Ya tenés cuenta? Iniciá sesión'}
-          </p>
-        </form>
-      </div>
-    )
-  }
-
-  // VENCIMIENTO DE SUSCRIPCIÓN
-  const diasRestantes = perfil?.vence_el ? Math.ceil((new Date(perfil.vence_el) - new Date()) / (1000 * 60 * 60 * 24)) : 30
-  const suscripcionVencida = diasRestantes <= 0 && perfil?.rol !== 'admin'
-
-  if (suscripcionVencida) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <h2 style={{ color: '#fca5a5', fontSize: '24px', marginBottom: '10px' }}>⚠️ Suscripción Vencida</h2>
-        <p style={{ color: '#cbd5e1', maxWidth: '400px', marginBottom: '20px' }}>
-          Hola <strong>{perfil?.nombre_completo}</strong>. Tu mes de suscripción ha caducado. Envía tu comprobante de pago para renovar el servicio por 30 días más.
-        </p>
-        <a
-          href={`https://wa.me/${MI_WHATSAPP}?text=Hola%20Profe%20Fiori,%20te%20env%C3%ADo%20el%20comprobante%20para%20renovar%20mi%20suscripci%C3%B3n.`}
-          target="_blank"
-          rel="noreferrer"
-          style={{ padding: '14px 24px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', borderRadius: '8px', textDecoration: 'none', fontSize: '16px' }}
-        >
-          📱 Enviar Comprobante por WhatsApp
-        </a>
-        <button onClick={cerrarSesion} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>Cerrar Sesión</button>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
-      
-      {/* Banner de Anuncio Global */}
-      {anuncioActivo && (
-        <div style={{ backgroundColor: '#1e3a8a', color: '#93c5fd', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #3b82f6' }}>
-          <span>📢 <strong>Aviso:</strong> {anuncioActivo}</span>
-        </div>
-      )}
-
-      {/* Recordatorio de Vencimiento de 5 Días */}
-      {diasRestantes <= 5 && perfil?.rol !== 'admin' && (
-        <div style={{ backgroundColor: '#854d0e', color: '#fef08a', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px' }}>
-          ⏰ <strong>¡Atención!</strong> Tu suscripción vence en {diasRestantes} días. Enviar comprobante por WhatsApp para renovar.
-        </div>
-      )}
-
-      {/* Encabezado */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
-        <div>
-          <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>PROFE: {(perfil?.nombre_completo || usuario.email).toUpperCase()}</h1>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>{usuario.email} {perfil?.rol === 'admin' && '👑 (ADMIN)'}</span>
-        </div>
-        <button onClick={cerrarSesion} style={{ padding: '6px 12px', backgroundColor: '#334155', color: '#fca5a5', bord
+            {modoAuth === 'login' ? '¿No tenés cuenta? Registrate acá' : '¿Ya tenés cuenta? Iniciá sesión'
