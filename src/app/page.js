@@ -7,13 +7,11 @@ export default function Home() {
   const [perfil, setPerfil] = useState(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
 
-  // Auth States
   const [modoAuth, setModoAuth] = useState('login')
   const [emailInput, setEmailInput] = useState('')
   const [passInput, setPassInput] = useState('')
   const [nombreInput, setNombreInput] = useState('')
 
-  // App Data
   const [cursos, setCursos] = useState([])
   const [cursoSeleccionado, setCursoSeleccionado] = useState('')
   const [alumnos, setAlumnos] = useState([])
@@ -22,22 +20,18 @@ export default function Home() {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [pestaña, setPestaña] = useState('asistencia')
 
-  // Bitácora y Cierre
   const [contenidoClase, setContenidoClase] = useState('')
   const [actividadesClase, setActividadesClase] = useState('')
   const [obsClase, setObsClase] = useState('')
 
-  // Calificaciones
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
   const [resumenFecha, setResumenFecha] = useState([])
 
-  // Gestión de Cursos y Alumnos
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('')
   const [textoCargaMasiva, setTextoCargaMasiva] = useState('')
 
-  // Admin
   const [anuncioActivo, setAnuncioActivo] = useState('')
   const [nuevoAnuncioAdmin, setNuevoAnuncioAdmin] = useState('')
   const [listaProfesAdmin, setListaProfesAdmin] = useState([])
@@ -45,7 +39,6 @@ export default function Home() {
   const logoSrc = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=150&auto=format&fit=crop&q=80"
   const MI_WHATSAPP = "5493510000000"
 
-  // 1. Control de Sesión
   useEffect(() => {
     async function verificarSesion() {
       const { data: { session } } = await supabase.auth.getSession()
@@ -87,11 +80,11 @@ export default function Home() {
     e.preventDefault()
     if (modoAuth === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email: emailInput, password: passInput })
-      if (error) alert('Error al iniciar sesión: ' + error.message)
+      if (error) alert('Error: ' + error.message)
     } else {
       const { data, error } = await supabase.auth.signUp({ email: emailInput, password: passInput })
       if (error) {
-        alert('Error al registrarse: ' + error.message)
+        alert('Error: ' + error.message)
       } else if (data.user) {
         await supabase.from('perfiles').insert([
           { id: data.user.id, nombre_completo: nombreInput, rol: 'profe', estado_suscripcion: 'activo', vence_el: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] }
@@ -107,7 +100,6 @@ export default function Home() {
     setPerfil(null)
   }
 
-  // Cargar Cursos
   useEffect(() => {
     if (!usuario) return
     async function cargarCursos() {
@@ -123,27 +115,17 @@ export default function Home() {
     cargarCursos()
   }, [usuario])
 
-  // Cargar Alumnos y Datos del Curso
   useEffect(() => {
     if (!cursoSeleccionado || !usuario) return
     async function cargarDatosCurso() {
-      const { data: alms } = await supabase
-        .from('alumnos')
-        .select('*')
-        .eq('curso_id', cursoSeleccionado)
-        .order('apellido')
-
+      const { data: alms } = await supabase.from('alumnos').select('*').eq('curso_id', cursoSeleccionado).order('apellido')
       if (alms) {
         setAlumnos(alms)
         const inicialesAsis = {}
         alms.forEach((a) => (inicialesAsis[a.id] = 'PRESENTE'))
         setAsistencias(inicialesAsis)
 
-        const { data: conts } = await supabase
-          .from('conteo_participaciones')
-          .select('*')
-          .eq('fecha', fecha)
-
+        const { data: conts } = await supabase.from('conteo_participaciones').select('*').eq('fecha', fecha)
         const mapaConteos = {}
         alms.forEach((a) => {
           const encontrado = conts?.find((c) => c.alumno_id === a.id)
@@ -153,11 +135,7 @@ export default function Home() {
 
         const alumnoIds = alms.map(a => a.id)
         if (alumnoIds.length > 0) {
-          const { data: cals } = await supabase
-            .from('calificaciones')
-            .select('*')
-            .in('alumno_id', alumnoIds)
-          
+          const { data: cals } = await supabase.from('calificaciones').select('*').in('alumno_id', alumnoIds)
           const mapaCals = {}
           ;(cals || []).forEach(c => {
             if (!mapaCals[c.alumno_id]) mapaCals[c.alumno_id] = {}
@@ -170,23 +148,16 @@ export default function Home() {
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
 
-  // Cargar Resumen
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && usuario) {
       async function cargarResumenPorFecha() {
-        const { data } = await supabase
-          .from('asistencias')
-          .select('*, alumnos!inner(curso_id, apellido, nombre)')
-          .eq('fecha', fecha)
-          .eq('alumnos.curso_id', cursoSeleccionado)
-
+        const { data } = await supabase.from('asistencias').select('*, alumnos!inner(curso_id, apellido, nombre)').eq('fecha', fecha).eq('alumnos.curso_id', cursoSeleccionado)
         if (data) setResumenFecha(data)
       }
       cargarResumenPorFecha()
     }
   }, [pestaña, fecha, cursoSeleccionado, usuario])
 
-  // Admin Data
   useEffect(() => {
     if (perfil?.rol === 'admin' && pestaña === 'adminPanel') {
       cargarProfesAdmin()
@@ -205,7 +176,7 @@ export default function Home() {
     const nuevaFecha = fechaBase.toISOString().split('T')[0]
 
     await supabase.from('perfiles').update({ vence_el: nuevaFecha, estado_suscripcion: 'activo' }).eq('id', id)
-    alert(`Suscripción extendida ${dias} días hasta el ${nuevaFecha}`)
+    alert(`Suscripción extendida ${dias} días`)
     cargarProfesAdmin()
   }
 
@@ -215,13 +186,12 @@ export default function Home() {
     await supabase.from('anuncios_admin').insert([{ mensaje: nuevoAnuncioAdmin, activo: true }])
     setAnuncioActivo(nuevoAnuncioAdmin)
     setNuevoAnuncioAdmin('')
-    alert('Anuncio publicado a todos los profes')
+    alert('Anuncio publicado')
   }
 
-  // Cursos y Alumnos
   const crearCurso = async () => {
     if (cursos.length >= 20 && perfil?.rol !== 'admin') {
-      alert('Has alcanzado el límite de 20 cursos.')
+      alert('Límite de 20 cursos alcanzado.')
       return
     }
     if (!nuevoCursoNombre.trim()) return
@@ -230,12 +200,11 @@ export default function Home() {
       setCursos([...cursos, data[0]])
       setCursoSeleccionado(data[0].id)
       setNuevoCursoNombre('')
-      alert('Curso creado con éxito')
     }
   }
 
   const eliminarCurso = async (id) => {
-    if (confirm('¿Eliminar este curso y todos sus alumnos?')) {
+    if (confirm('¿Eliminar este curso?')) {
       await supabase.from('cursos').delete().eq('id', id)
       const restantes = cursos.filter(c => c.id !== id)
       setCursos(restantes)
@@ -246,7 +215,7 @@ export default function Home() {
 
   const agregarAlumnoIndividual = async () => {
     if (alumnos.length >= 60 && perfil?.rol !== 'admin') {
-      alert('Has alcanzado el límite de 60 alumnos.')
+      alert('Límite de 60 alumnos alcanzado.')
       return
     }
     if (!nuevoAlumnoApellido.trim() || !nuevoAlumnoNombre.trim()) return
@@ -264,7 +233,7 @@ export default function Home() {
   const procesarCargaMasiva = async () => {
     const lineas = textoCargaMasiva.split('\n').filter(l => l.trim() !== '')
     if (alumnos.length + lineas.length > 60 && perfil?.rol !== 'admin') {
-      alert('No podés superar los 60 alumnos por curso.')
+      alert('Supera el límite de 60 alumnos por curso.')
       return
     }
 
@@ -287,7 +256,7 @@ export default function Home() {
     if (!error && data) {
       setAlumnos([...alumnos, ...data])
       setTextoCargaMasiva('')
-      alert(`¡Se agregaron ${data.length} alumnos correctamente!`)
+      alert(`¡Se agregaron ${data.length} alumnos!`)
     }
   }
 
@@ -298,7 +267,6 @@ export default function Home() {
     }
   }
 
-  // Operaciones Lista
   const toggleEstado = (id) => {
     setAsistencias((prev) => ({
       ...prev,
@@ -311,29 +279,17 @@ export default function Home() {
     const nuevoValor = valorActual + delta
     setConteos((prev) => ({ ...prev, [alumno_id]: nuevoValor }))
 
-    await supabase
-      .from('conteo_participaciones')
-      .upsert(
-        { alumno_id, fecha, cantidad: nuevoValor },
-        { onConflict: ['alumno_id', 'fecha'] }
-      )
+    await supabase.from('conteo_participaciones').upsert({ alumno_id, fecha, cantidad: nuevoValor }, { onConflict: ['alumno_id', 'fecha'] })
   }
 
   const guardarAsistencias = async () => {
-    const registros = Object.entries(asistencias).map(([alumno_id, estado]) => ({
-      alumno_id,
-      fecha,
-      estado,
-    }))
-    
-    const { error } = await supabase
-      .from('asistencias')
-      .upsert(registros, { onConflict: ['alumno_id', 'fecha'] })
+    const registros = Object.entries(asistencias).map(([alumno_id, estado]) => ({ alumno_id, fecha, estado }))
+    const { error } = await supabase.from('asistencias').upsert(registros, { onConflict: ['alumno_id', 'fecha'] })
 
     if (error) {
-      alert('Error al guardar asistencias: ' + error.message)
+      alert('Error: ' + error.message)
     } else {
-      alert('¡Asistencias guardadas exitosamente!')
+      alert('¡Asistencias guardadas!')
       setPestaña('resumen')
     }
   }
@@ -353,32 +309,17 @@ export default function Home() {
       if (v < 0) neg += Math.abs(v)
     })
 
-    const registrosAsis = Object.entries(asistencias).map(([alumno_id, estado]) => ({
-      alumno_id,
-      fecha,
-      estado,
-    }))
+    const registrosAsis = Object.entries(asistencias).map(([alumno_id, estado]) => ({ alumno_id, fecha, estado }))
     await supabase.from('asistencias').upsert(registrosAsis, { onConflict: ['alumno_id', 'fecha'] })
 
     const { error } = await supabase.from('clases').insert([
-      { 
-        curso_id: cursoSeleccionado, 
-        fecha, 
-        contenido: contenidoClase || 'Clase regular', 
-        actividades: actividadesClase, 
-        observaciones: obsClase,
-        presentes: cantPresentes,
-        ausentes: cantAusentes,
-        puntos_pos: pos,
-        puntos_neg: neg,
-        user_id: usuario.id
-      }
+      { curso_id: cursoSeleccionado, fecha, contenido: contenidoClase || 'Clase regular', actividades: actividadesClase, observaciones: obsClase, presentes: cantPresentes, ausentes: cantAusentes, puntos_pos: pos, puntos_neg: neg, user_id: usuario.id }
     ])
 
     if (error) {
-      alert('Error al realizar el cierre: ' + error.message)
+      alert('Error: ' + error.message)
     } else {
-      alert(`¡Cierre de Clase Exitoso!\n\n👥 ${cantPresentes} Presentes | ❌ ${cantAusentes} Ausentes\n➕ ${pos} Puntos Positivos | ➖ ${neg} Puntos Negativos`)
+      alert(`¡Cierre Exitoso!\n👥 ${cantPresentes} Presentes | ❌ ${cantAusentes} Ausentes`)
       setContenidoClase('')
       setActividadesClase('')
       setObsClase('')
@@ -390,26 +331,12 @@ export default function Home() {
     const actual = calificacionesCurso[alumno_id]?.[nucleo] || { alumno_id, nucleo, nota_regular: null, recu_1: null, recu_2: null, nota_trabajos: null, nota_final: null }
     const actualizado = { ...actual, [campo]: valor === '' ? null : Number(valor) }
 
-    setCalificacionesCurso(prev => ({
-      ...prev,
-      [alumno_id]: {
-        ...(prev[alumno_id] || {}),
-        [nucleo]: actualizado
-      }
-    }))
-
-    await supabase.from('calificaciones').upsert(
-      { alumno_id, nucleo, ...actualizado },
-      { onConflict: ['alumno_id', 'nucleo'] }
-    )
+    setCalificacionesCurso(prev => ({ ...prev, [alumno_id]: { ...(prev[alumno_id] || {}), [nucleo]: actualizado } }))
+    await supabase.from('calificaciones').upsert({ alumno_id, nucleo, ...actualizado }, { onConflict: ['alumno_id', 'nucleo'] })
   }
 
   if (cargandoSesion) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', fontFamily: 'sans-serif' }}>
-        <h2>Cargando aplicación...</h2>
-      </div>
-    )
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ffffff', fontFamily: 'sans-serif' }}><h2>Cargando...</h2></div>
   }
 
   if (!usuario) {
@@ -455,47 +382,246 @@ export default function Home() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
         <h2 style={{ color: '#fca5a5', fontSize: '24px', marginBottom: '10px' }}>⚠️ Suscripción Vencida</h2>
         <p style={{ color: '#cbd5e1', maxWidth: '400px', marginBottom: '20px' }}>
-          Hola <strong>{perfil?.nombre_completo}</strong>. Tu mes de suscripción ha caducado. Envía tu comprobante de pago para renovar el servicio por 30 días más.
+          Hola <strong>{perfil?.nombre_completo}</strong>. Tu suscripción ha caducado. Envía tu comprobante de pago para renovar el servicio.
         </p>
-        <a
-          href={`https://wa.me/${MI_WHATSAPP}?text=Hola%20Profe%20Fiori,%20te%20env%C3%ADo%20el%20comprobante%20para%20renovar%20mi%20suscripci%C3%B3n.`}
-          target="_blank"
-          rel="noreferrer"
-          style={{ padding: '14px 24px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', borderRadius: '8px', textDecoration: 'none', fontSize: '16px' }}
-        >
+        <a href={`https://wa.me/${MI_WHATSAPP}?text=Hola%20Profe%20Fiori,%20te%20env%C3%ADo%20el%20comprobante.`} target="_blank" rel="noreferrer" style={{ padding: '14px 24px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', borderRadius: '8px', textDecoration: 'none', fontSize: '16px' }}>
           📱 Enviar Comprobante por WhatsApp
         </a>
         <button onClick={cerrarSesion} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>Cerrar Sesión</button>
       </div>
     )
-  }
-
-  return (
+                                                                   }
+                return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
       {anuncioActivo && (
-        <div style={{ backgroundColor: '#1e3a8a', color: '#93c5fd', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #3b82f6' }}>
-          <span>📢 <strong>Aviso:</strong> {anuncioActivo}</span>
+        <div style={{ backgroundColor: '#1e3a8a', color: '#93c5fd', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', border: '1px solid #3b82f6' }}>
+          📢 <strong>Aviso:</strong> {anuncioActivo}
         </div>
       )}
 
       {diasRestantes <= 5 && perfil?.rol !== 'admin' && (
         <div style={{ backgroundColor: '#854d0e', color: '#fef08a', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px' }}>
-          ⏰ <strong>¡Atención!</strong> Tu suscripción vence en {diasRestantes} días. Enviar comprobante por WhatsApp para renovar.
+          ⏰ <strong>¡Atención!</strong> Tu suscripción vence en {diasRestantes} días.
         </div>
       )}
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
         <div>
           <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>PROFE: {(perfil?.nombre_completo || usuario.email).toUpperCase()}</h1>
           <span style={{ color: '#94a3b8', fontSize: '12px' }}>{usuario.email} {perfil?.rol === 'admin' && '👑 (ADMIN)'}</span>
         </div>
-        <button onClick={cerrarSesion} style={{ padding: '6px 12px', backgroundColor: '#334155', color: '#fca5a5', border: '1px solid #dc2626', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-          Salir
-        </button>
+        <button onClick={cerrarSesion} style={{ padding: '6px 12px', backgroundColor: '#334155', color: '#fca5a5', border: '1px solid #dc2626', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Salir</button>
       </div>
 
-      {/* Selectors */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <sel
+        <select value={cursoSeleccionado} onChange={(e) => setCursoSeleccionado(e.target.value)} style={{ padding: '12px', borderRadius: '8px', fontSize: '15px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6', flex: '1', minWidth: '180px' }}>
+          {cursos.length === 0 ? <option value="">Sin cursos</option> : cursos.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
+        </select>
+        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={{ padding: '12px', borderRadius: '8px', fontSize: '15px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6' }} />
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button onClick={() => setPestaña('asistencia')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Tomar</button>
+        <button onClick={() => setPestaña('resumen')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Ver Asis</button>
+        <button onClick={() => setPestaña('participacion')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Puntos</button>
+        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚡ Cierre</button>
+        <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Notas</button>
+        <button onClick={() => setPestaña('gestion')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'gestion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚙️ Cursos</button>
+        {perfil?.rol === 'admin' && (
+          <button onClick={() => setPestaña('adminPanel')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'adminPanel' ? '#16a34a' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>👑 Admin</button>
+        )}
+      </div>
+
+      {pestaña === 'asistencia' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Tomar Asistencia ({alumnos.length} Alumnos) - {fecha}</h3>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {alumnos.map((a) => (
+              <li key={a.id} style={{ padding: '14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                <span style={{ fontWeight: '500' }}>{a.apellido}, {a.nombre}</span>
+                <button onClick={() => toggleEstado(a.id)} style={{ padding: '8px 16px', borderRadius: '6px', backgroundColor: asistencias[a.id] === 'PRESENTE' ? '#2563eb' : '#64748b', color: '#ffffff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+                  {asistencias[a.id] || 'PRESENTE'}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button onClick={guardarAsistencias} style={{ width: '100%', padding: '16px', marginTop: '20px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>
+            Guardar Lista del Día
+          </button>
+        </div>
+      )}
+
+      {pestaña === 'resumen' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Asistencia Registrada - {fecha}</h3>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {resumenFecha.map((r, index) => (
+              <li key={index} style={{ padding: '12px 14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                <span style={{ fontWeight: '500' }}>{r.alumnos.apellido}, {r.alumnos.nombre}</span>
+                <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: r.estado === 'PRESENTE' ? '#16a34a' : '#dc2626', color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }}>{r.estado}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {pestaña === 'participacion' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Contador de Puntos - {fecha}</h3>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {alumnos.map((a) => {
+              const valor = conteos[a.id] || 0
+              return (
+                <li key={a.id} style={{ padding: '12px 14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                  <span style={{ fontWeight: '500' }}>{a.apellido}, {a.nombre}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button onClick={() => cambiarConteo(a.id, -1)} style={{ width: '36px', height: '36px', borderRadius: '6px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>-</button>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold', minWidth: '30px', textAlign: 'center', color: valor < 0 ? '#fca5a5' : valor > 0 ? '#86efac' : '#ffffff' }}>{valor}</span>
+                    <button onClick={() => cambiarConteo(a.id, 1)} style={{ width: '36px', height: '36px', borderRadius: '6px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>+</button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {pestaña === 'cierreClase' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>⚡ Cierre y Resumen de Clase - {fecha}</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Presentes / Ausentes</span>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac' }}>
+                {Object.values(asistencias).filter(e => e === 'PRESENTE').length} ✅ / {Object.values(asistencias).filter(e => e === 'AUSENTE').length} ❌
+              </span>
+            </div>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Puntos Otorgados</span>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#60a5fa' }}>
+                +{Object.values(conteos).filter(v => v > 0).reduce((a,b)=>a+b,0)} / -{Object.values(conteos).filter(v => v < 0).reduce((a,b)=>a+Math.abs(b),0)}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input type="text" value={contenidoClase} onChange={(e) => setContenidoClase(e.target.value)} placeholder="Contenido trabajado..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
+            <textarea value={actividadesClase} onChange={(e) => setActividadesClase(e.target.value)} placeholder="Actividades..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', height: '60px' }} />
+            <input type="text" value={obsClase} onChange={(e) => setObsClase(e.target.value)} placeholder="Observaciones..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
+            <button onClick={ejecutarCierreDeClase} style={{ padding: '16px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '10px' }}>🔒 Confirmar y Guardar Cierre</button>
+          </div>
+        </div>
+      )}
+
+      {pestaña === 'calificaciones' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>Calificaciones por Núcleos</h3>
+          {alumnos.map((a) => (
+            <div key={a.id} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', marginBottom: '15px', border: '1px solid #334155' }}>
+              <h4 style={{ color: '#60a5fa', marginBottom: '10px' }}>{a.apellido}, {a.nombre}</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[1, 2, 3, 4, 5, 6].map((nuc) => {
+                  const reg = calificacionesCurso[a.id]?.[nuc] || {}
+                  return (
+                    <div key={nuc} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0f172a', padding: '8px', borderRadius: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                      <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>Núcleo {nuc}</span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Reg:</span>
+                        <input type="number" step="0.1" value={reg.nota_regular ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Rec1:</span>
+                        <input type="number" step="0.1" value={reg.recu_1 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: 'bold' }}>Final:</span>
+                        <input type="number" step="0.1" value={reg.nota_final ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} style={{ width: '50px', padding: '4px', textAlign: 'center', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pestaña === 'gestion' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>⚙️ Gestión de Cursos y Alumnos</h3>
+          <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
+            <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>Crear Nuevo Curso (Max 20)</h4>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input type="text" value={nuevoCursoNombre} onChange={(e) => setNuevoCursoNombre(e.target.value)} placeholder="Ej: 4° B" style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+              <button onClick={crearCurso} style={{ padding: '10px 16px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Guardar</button>
+            </div>
+            {cursoSeleccionado && (
+              <button onClick={() => eliminarCurso(cursoSeleccionado)} style={{ marginTop: '10px', padding: '6px 12px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>
+                🗑️ Eliminar Curso Seleccionado
+              </button>
+            )}
+          </div>
+
+          {cursoSeleccionado && (
+            <>
+              <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
+                <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>Agregar Alumno Individual (Max 60)</h4>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <input type="text" value={nuevoAlumnoApellido} onChange={(e) => setNuevoAlumnoApellido(e.target.value)} placeholder="Apellido" style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+                  <input type="text" value={nuevoAlumnoNombre} onChange={(e) => setNuevoAlumnoNombre(e.target.value)} placeholder="Nombre" style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+                  <button onClick={agregarAlumnoIndividual} style={{ padding: '10px 16px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Agregar</button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
+                <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>📋 Carga Masiva (Excel/WhatsApp)</h4>
+                <textarea value={textoCargaMasiva} onChange={(e) => setTextoCargaMasiva(e.target.value)} placeholder="Pérez, Juan&#10;García, María" style={{ width: '100%', height: '80px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155', marginBottom: '8px' }} />
+                <button onClick={procesarCargaMasiva} style={{ padding: '10px 16px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Importar Lista Completa</button>
+              </div>
+
+              <h4 style={{ color: '#93c5fd', marginBottom: '10px' }}>Alumnos en este curso ({alumnos.length}/60):</h4>
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {alumnos.map((a) => (
+                  <li key={a.id} style={{ padding: '10px', marginBottom: '6px', backgroundColor: '#0f172a', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{a.apellido}, {a.nombre}</span>
+                    <button onClick={() => eliminarAlumno(a.id)} style={{ padding: '4px 8px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Eliminar</button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+
+      {pestaña === 'adminPanel' && perfil?.rol === 'admin' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #16a34a' }}>
+          <h3 style={{ color: '#4ade80', marginBottom: '15px' }}>👑 Panel de Control del Administrador</h3>
+          <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
+            <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>📢 Publicar Aviso Global</h4>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input type="text" value={nuevoAnuncioAdmin} onChange={(e) => setNuevoAnuncioAdmin(e.target.value)} placeholder="Aviso..." style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+              <button onClick={publicarAnuncioAdmin} style={{ padding: '10px 16px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Publicar</button>
+            </div>
+          </div>
+
+          <h4 style={{ color: '#cbd5e1', marginBottom: '10px' }}>Profesores Registrados:</h4>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {listaProfesAdmin.map((p) => (
+              <li key={p.id} style={{ padding: '12px', marginBottom: '8px', backgroundColor: '#0f172a', borderRadius: '8px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong>{p.nombre_completo || 'Profe'}</strong> ({p.rol})
+                    <br />
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Vence el: {p.vence_el || 'Sin fecha'}</span>
+                  </div>
+                  {p.rol !== 'admin' && (
+                    <button onClick={() => extenderSuscripcionAdmin(p.id, 30)} style={{ padding: '6px 12px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>+30 Días</button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+    </div>
+  )
+        }
+      
