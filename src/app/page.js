@@ -25,6 +25,7 @@ export default function Home() {
   const [alumnoInformeId, setAlumnoInformeId] = useState('')
   const [historialAlumno, setHistorialAlumno] = useState([])
   const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0, ptsPos: 0, ptsNeg: 0 })
+  const [historialClases, setHistorialClases] = useState([])
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('')
@@ -142,9 +143,10 @@ export default function Home() {
         }
       }
 
-      // Cargar estadísticas generales del curso para el informe
-      const { data: cls } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado)
+      // Cargar clases del curso para estadísticas y el historial
+      const { data: cls } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado).order('fecha', { ascending: false })
       if (cls) {
+        setHistorialClases(cls)
         let tPres = 0
         let tAus = 0
         let pPos = 0
@@ -347,7 +349,7 @@ export default function Home() {
       setContenidoClase('')
       setActividadesClase('')
       setObsClase('')
-      setPestaña('resumen')
+      setPestaña('historialClases')
     }
   }
 
@@ -446,17 +448,18 @@ export default function Home() {
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={{ padding: '12px', borderRadius: '8px', fontSize: '15px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6' }} />
       </div>
 
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button onClick={() => setPestaña('asistencia')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Tomar</button>
-        <button onClick={() => setPestaña('resumen')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Ver Asis</button>
-        <button onClick={() => setPestaña('participacion')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Puntos</button>
-        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚡ Cierre</button>
-        <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Notas</button>
-        <button onClick={() => setPestaña('informeAlumno')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'informeAlumno' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>👤 Inf. Alumno</button>
-        <button onClick={() => setPestaña('informeCurso')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'informeCurso' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>📊 Inf. Curso</button>
-        <button onClick={() => setPestaña('gestion')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'gestion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚙️ Cursos</button>
+      <div style={{ display: 'flex', gap: '5px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button onClick={() => setPestaña('asistencia')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Tomar</button>
+        <button onClick={() => setPestaña('resumen')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Ver Asis</button>
+        <button onClick={() => setPestaña('participacion')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Puntos</button>
+        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>⚡ Cierre</button>
+        <button onClick={() => setPestaña('historialClases')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'historialClases' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📖 Historial</button>
+        <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Notas</button>
+        <button onClick={() => setPestaña('informeAlumno')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'informeAlumno' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>👤 Alumno</button>
+        <button onClick={() => setPestaña('informeCurso')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'informeCurso' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📊 Curso</button>
+        <button onClick={() => setPestaña('gestion')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'gestion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>⚙️ Cursos</button>
         {perfil?.rol === 'admin' && (
-          <button onClick={() => setPestaña('adminPanel')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'adminPanel' ? '#16a34a' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>👑 Admin</button>
+          <button onClick={() => setPestaña('adminPanel')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'adminPanel' ? '#16a34a' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>👑 Admin</button>
         )}
       </div>
 
@@ -541,6 +544,33 @@ export default function Home() {
         </div>
       )}
 
+      {/* Pestaña Historial de Clases */}
+      {pestaña === 'historialClases' && (
+        <div>
+          <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>📖 Historial de Clases Guardadas</h3>
+          {historialClases.length === 0 ? (
+            <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>No hay cierres de clase registrados en este curso todavía.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {historialClases.map((cls) => (
+                <div key={cls.id} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
+                    <span style={{ fontWeight: 'bold', color: '#60a5fa' }}>📅 {cls.fecha}</span>
+                    <span style={{ fontSize: '12px', color: '#86efac' }}>👥 {cls.presentes || 0} Pres. | ❌ {cls.ausentes || 0} Aus.</span>
+                  </div>
+                  <p style={{ margin: '6px 0', fontSize: '14px' }}><strong>Contenido:</strong> {cls.contenido || 'Sin contenido especificado'}</p>
+                  {cls.actividades && <p style={{ margin: '6px 0', fontSize: '13px', color: '#cbd5e1' }}><strong>Actividades:</strong> {cls.actividades}</p>}
+                  {cls.observaciones && <p style={{ margin: '6px 0', fontSize: '13px', color: '#94a3b8' }}><strong>Observaciones:</strong> {cls.observaciones}</p>}
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#93c5fd' }}>
+                    Puntos clase: +{cls.puntos_pos || 0} / -{cls.puntos_neg || 0}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {pestaña === 'calificaciones' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>Calificaciones por Núcleos</h3>
@@ -619,7 +649,7 @@ export default function Home() {
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
               <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Global Curso</span>
               <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
-                {informeCursoStats.presentes || informeCursoStats.presentismos} ✅ / {informeCursoStats.ausentismos} ❌
+                {informeCursoStats.presentismos} ✅ / {informeCursoStats.ausentismos} ❌
               </p>
             </div>
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
