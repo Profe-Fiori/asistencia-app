@@ -24,6 +24,7 @@ export default function Home() {
   const [resumenFecha, setResumenFecha] = useState([])
   const [alumnoInformeId, setAlumnoInformeId] = useState('')
   const [historialAlumno, setHistorialAlumno] = useState([])
+  const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0, ptsPos: 0, ptsNeg: 0 })
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
   const [nuevoAlumnoNombre, setNuevoAlumnoNombre] = useState('')
@@ -139,6 +140,22 @@ export default function Home() {
           })
           setCalificacionesCurso(mapaCals)
         }
+      }
+
+      // Cargar estadísticas generales del curso para el informe
+      const { data: cls } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado)
+      if (cls) {
+        let tPres = 0
+        let tAus = 0
+        let pPos = 0
+        let pNeg = 0
+        cls.forEach(c => {
+          tPres += (c.presentes || 0)
+          tAus += (c.ausentes || 0)
+          pPos += (c.puntos_pos || 0)
+          pNeg += (c.puntos_neg || 0)
+        })
+        setInformeCursoStats({ totalClases: cls.length, presentismos: tPres, ausentismos: tAus, ptsPos: pPos, ptsNeg: pNeg })
       }
     }
     cargarDatosCurso()
@@ -586,14 +603,30 @@ export default function Home() {
       {pestaña === 'informeCurso' && (
         <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155' }}>
           <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📊 Informe General del Curso</h3>
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-            <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
               <span style={{ color: '#94a3b8', fontSize: '12px' }}>Total Alumnos</span>
-              <p style={{ fontSize: '22px', fontWeight: 'bold', color: '#3b82f6', margin: '5px 0 0 0' }}>{alumnos.length}</p>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#3b82f6', margin: '5px 0 0 0' }}>{alumnos.length}</p>
             </div>
-            <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
-              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Estado Curso</span>
-              <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#4ade80', margin: '5px 0 0 0' }}>Activo</p>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Clases Registradas</span>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#4ade80', margin: '5px 0 0 0' }}>{informeCursoStats.totalClases}</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Global Curso</span>
+              <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
+                {informeCursoStats.presentes || informeCursoStats.presentismos} ✅ / {informeCursoStats.ausentismos} ❌
+              </p>
+            </div>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Balance Puntos Grupo</span>
+              <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#60a5fa', margin: '5px 0 0 0' }}>
+                +{informeCursoStats.ptsPos} / -{informeCursoStats.ptsNeg}
+              </p>
             </div>
           </div>
         </div>
