@@ -26,6 +26,8 @@ export default function Home() {
 
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
   const [resumenFecha, setResumenFecha] = useState([])
+  const [alumnoInformeId, setAlumnoInformeId] = useState('')
+  const [historialAlumno, setHistorialAlumno] = useState([])
 
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
@@ -62,7 +64,6 @@ export default function Home() {
     })
 
     cargarAnuncioGlobal()
-
     return () => authListener.subscription.unsubscribe()
   }, [])
 
@@ -121,6 +122,7 @@ export default function Home() {
       const { data: alms } = await supabase.from('alumnos').select('*').eq('curso_id', cursoSeleccionado).order('apellido')
       if (alms) {
         setAlumnos(alms)
+        if (alms.length > 0) setAlumnoInformeId(alms[0].id)
         const inicialesAsis = {}
         alms.forEach((a) => (inicialesAsis[a.id] = 'PRESENTE'))
         setAsistencias(inicialesAsis)
@@ -157,6 +159,17 @@ export default function Home() {
       cargarResumenPorFecha()
     }
   }, [pestaña, fecha, cursoSeleccionado, usuario])
+
+  useEffect(() => {
+    if (pestaña === 'informeAlumno' && alumnoInformeId) {
+      async function cargarHistorialAlumno() {
+        const { data: asis } = await supabase.from('asistencias').select('*').eq('alumno_id', alumnoInformeId)
+        const { data: pts } = await supabase.from('conteo_participaciones').select('*').eq('alumno_id', alumnoInformeId)
+        setHistorialAlumno({ asistencias: asis || [], puntos: pts || [] })
+      }
+      cargarHistorialAlumno()
+    }
+  }, [pestaña, alumnoInformeId])
 
   useEffect(() => {
     if (perfil?.rol === 'admin' && pestaña === 'adminPanel') {
@@ -390,8 +403,8 @@ export default function Home() {
         <button onClick={cerrarSesion} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>Cerrar Sesión</button>
       </div>
     )
-        }
-            return (
+                      }
+                                                    return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
       {anuncioActivo && (
@@ -421,15 +434,18 @@ export default function Home() {
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={{ padding: '12px', borderRadius: '8px', fontSize: '15px', backgroundColor: '#1e293b', color: '#ffffff', border: '1px solid #3b82f6' }} />
       </div>
 
+      {/* Botones de navegación con Informe Alumno e Informe Curso */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button onClick={() => setPestaña('asistencia')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Tomar</button>
-        <button onClick={() => setPestaña('resumen')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Ver Asis</button>
-        <button onClick={() => setPestaña('participacion')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Puntos</button>
-        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚡ Cierre</button>
-        <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Notas</button>
-        <button onClick={() => setPestaña('gestion')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'gestion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚙️ Cursos</button>
+        <button onClick={() => setPestaña('asistencia')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Tomar</button>
+        <button onClick={() => setPestaña('resumen')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Ver Asis</button>
+        <button onClick={() => setPestaña('participacion')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Puntos</button>
+        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚡ Cierre</button>
+        <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>Notas</button>
+        <button onClick={() => setPestaña('informeAlumno')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'informeAlumno' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>👤 Inf. Alumno</button>
+        <button onClick={() => setPestaña('informeCurso')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'informeCurso' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>📊 Inf. Curso</button>
+        <button onClick={() => setPestaña('gestion')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'gestion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>⚙️ Cursos</button>
         {perfil?.rol === 'admin' && (
-          <button onClick={() => setPestaña('adminPanel')} style={{ padding: '8px', borderRadius: '6px', backgroundColor: pestaña === 'adminPanel' ? '#16a34a' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>👑 Admin</button>
+          <button onClick={() => setPestaña('adminPanel')} style={{ padding: '8px 6px', borderRadius: '6px', backgroundColor: pestaña === 'adminPanel' ? '#16a34a' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '11px', flex: 1 }}>👑 Admin</button>
         )}
       </div>
 
@@ -514,6 +530,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* Calificaciones con la casilla Rec2 agregada */}
       {pestaña === 'calificaciones' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>Calificaciones por Núcleos</h3>
@@ -526,13 +543,15 @@ export default function Home() {
                   return (
                     <div key={nuc} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0f172a', padding: '8px', borderRadius: '6px', flexWrap: 'wrap', gap: '6px' }}>
                       <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>Núcleo {nuc}</span>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Reg:</span>
-                        <input type="number" step="0.1" value={reg.nota_regular ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
-                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Rec1:</span>
-                        <input type="number" step="0.1" value={reg.recu_1 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
-                        <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: 'bold' }}>Final:</span>
-                        <input type="number" step="0.1" value={reg.nota_final ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} style={{ width: '50px', padding: '4px', textAlign: 'center', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }} />
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>Reg:</span>
+                        <input type="number" step="0.1" value={reg.nota_regular ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>Rec1:</span>
+                        <input type="number" step="0.1" value={reg.recu_1 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>Rec2:</span>
+                        <input type="number" step="0.1" value={reg.recu_2 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_2', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <span style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }}>Final:</span>
+                        <input type="number" step="0.1" value={reg.nota_final ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }} />
                       </div>
                     </div>
                   )
@@ -540,6 +559,52 @@ export default function Home() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pestaña Informe Alumno */}
+      {pestaña === 'informeAlumno' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>👤 Informe Individual por Alumno</h3>
+          <select value={alumnoInformeId} onChange={(e) => setAlumnoInformeId(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #3b82f6', marginBottom: '15px' }}>
+            {alumnos.map(a => <option key={a.id} value={a.id}>{a.apellido}, {a.nombre}</option>)}
+          </select>
+
+          {alumnoInformeId && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Total</span>
+                  <p style={{ fontSize: '18px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
+                    {historialAlumno.asistencias?.filter(a => a.estado === 'PRESENTE').length || 0} Pres. / {historialAlumno.asistencias?.filter(a => a.estado === 'AUSENTE').length || 0} Aus.
+                  </p>
+                </div>
+                <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>Puntos Acumulados</span>
+                  <p style={{ fontSize: '18px', fontWeight: 'bold', color: '#60a5fa', margin: '5px 0 0 0' }}>
+                    {historialAlumno.puntos?.reduce((a, b) => a + (b.cantidad || 0), 0) || 0} pts
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pestaña Informe Curso */}
+      {pestaña === 'informeCurso' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📊 Informe General del Curso</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Total Alumnos</span>
+              <p style={{ fontSize: '22px', fontWeight: 'bold', color: '#3b82f6', margin: '5px 0 0 0' }}>{alumnos.length}</p>
+            </div>
+            <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Estado Curso</span>
+              <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#4ade80', margin: '5px 0 0 0' }}>Activo</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -566,62 +631,4 @@ export default function Home() {
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <input type="text" value={nuevoAlumnoApellido} onChange={(e) => setNuevoAlumnoApellido(e.target.value)} placeholder="Apellido" style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
                   <input type="text" value={nuevoAlumnoNombre} onChange={(e) => setNuevoAlumnoNombre(e.target.value)} placeholder="Nombre" style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
-                  <button onClick={agregarAlumnoIndividual} style={{ padding: '10px 16px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Agregar</button>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
-                <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>📋 Carga Masiva (Excel/WhatsApp)</h4>
-                <textarea value={textoCargaMasiva} onChange={(e) => setTextoCargaMasiva(e.target.value)} placeholder="Pérez, Juan&#10;García, María" style={{ width: '100%', height: '80px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155', marginBottom: '8px' }} />
-                <button onClick={procesarCargaMasiva} style={{ padding: '10px 16px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Importar Lista Completa</button>
-              </div>
-
-              <h4 style={{ color: '#93c5fd', marginBottom: '10px' }}>Alumnos en este curso ({alumnos.length}/60):</h4>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {alumnos.map((a) => (
-                  <li key={a.id} style={{ padding: '10px', marginBottom: '6px', backgroundColor: '#0f172a', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{a.apellido}, {a.nombre}</span>
-                    <button onClick={() => eliminarAlumno(a.id)} style={{ padding: '4px 8px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Eliminar</button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-
-      {pestaña === 'adminPanel' && perfil?.rol === 'admin' && (
-        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #16a34a' }}>
-          <h3 style={{ color: '#4ade80', marginBottom: '15px' }}>👑 Panel de Control del Administrador</h3>
-          <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
-            <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>📢 Publicar Aviso Global</h4>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={nuevoAnuncioAdmin} onChange={(e) => setNuevoAnuncioAdmin(e.target.value)} placeholder="Aviso..." style={{ flex: 1, padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
-              <button onClick={publicarAnuncioAdmin} style={{ padding: '10px 16px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Publicar</button>
-            </div>
-          </div>
-
-          <h4 style={{ color: '#cbd5e1', marginBottom: '10px' }}>Profesores Registrados:</h4>
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {listaProfesAdmin.map((p) => (
-              <li key={p.id} style={{ padding: '12px', marginBottom: '8px', backgroundColor: '#0f172a', borderRadius: '8px', border: '1px solid #334155' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <strong>{p.nombre_completo || 'Profe'}</strong> ({p.rol})
-                    <br />
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Vence el: {p.vence_el || 'Sin fecha'}</span>
-                  </div>
-                  {p.rol !== 'admin' && (
-                    <button onClick={() => extenderSuscripcionAdmin(p.id, 30)} style={{ padding: '6px 12px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>+30 Días</button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-    </div>
-  )
-        }
-                      
+                  
