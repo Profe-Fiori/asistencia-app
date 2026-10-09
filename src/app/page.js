@@ -35,7 +35,7 @@ export default function Home() {
   const [listaProfesAdmin, setListaProfesAdmin] = useState([])
 
   const logoSrc = "/icon.png"
-  const MI_WHATSAPP = "5493510000000"
+  const MI_WHATSAPP = "5493516826342"
 
   useEffect(() => {
     async function verificarSesion() {
@@ -143,7 +143,6 @@ export default function Home() {
         }
       }
 
-      // Cargar clases del curso para estadísticas y el historial
       const { data: cls } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado).order('fecha', { ascending: false })
       if (cls) {
         setHistorialClases(cls)
@@ -369,7 +368,7 @@ export default function Home() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#0f172a', color: '#ffffff', padding: '20px', fontFamily: 'sans-serif' }}>
         <img src={logoSrc} alt="Logo" style={{ width: '110px', height: '110px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #3b82f6', marginBottom: '15px' }} />
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '5px' }}>PROFE FIORI APP</h1>
+        <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '5px' }}>PROFESOR FIORI NICOLAS</h1>
         <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '25px' }}>Gestión para Profesores</p>
 
         <form onSubmit={handleAuth} style={{ width: '100%', maxWidth: '340px', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#1e293b', padding: '25px', borderRadius: '12px', border: '1px solid #334155' }}>
@@ -410,7 +409,7 @@ export default function Home() {
         <p style={{ color: '#cbd5e1', maxWidth: '400px', marginBottom: '20px' }}>
           Hola <strong>{perfil?.nombre_completo}</strong>. Tu suscripción ha caducado. Envía tu comprobante de pago para renovar el servicio.
         </p>
-        <a href={`https://wa.me/${MI_WHATSAPP}?text=Hola%20Profe%20Fiori,%20te%20env%C3%ADo%20el%20comprobante.`} target="_blank" rel="noreferrer" style={{ padding: '14px 24px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', borderRadius: '8px', textDecoration: 'none', fontSize: '16px' }}>
+        <a href={`https://wa.me/${MI_WHATSAPP}?text=Hola%20Profe,%20te%20envío%20el%20comprobante%20de%20pago.`} target="_blank" rel="noreferrer" style={{ padding: '14px 24px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', borderRadius: '8px', textDecoration: 'none', fontSize: '16px' }}>
           📱 Enviar Comprobante por WhatsApp
         </a>
         <button onClick={cerrarSesion} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>Cerrar Sesión</button>
@@ -428,17 +427,21 @@ export default function Home() {
       )}
 
       {diasRestantes <= 5 && perfil?.rol !== 'admin' && (
-        <div style={{ backgroundColor: '#854d0e', color: '#fef08a', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px' }}>
-          ⏰ <strong>¡Atención!</strong> Tu suscripción vence en {diasRestantes} días.
+        <div style={{ backgroundColor: '#854d0e', color: '#fef08a', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>⏰ Tu suscripción vence en {diasRestantes} días.</span>
+          <a href={`https://wa.me/${MI_WHATSAPP}?text=Hola,%20quiero%20renovar%20mi%20suscripción.`} target="_blank" rel="noreferrer" style={{ padding: '4px 10px', backgroundColor: '#16a34a', color: '#fff', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', textDecoration: 'none' }}>Renovar WhatsApp</a>
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
         <div>
-          <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>PROFE: {(perfil?.nombre_completo || usuario.email).toUpperCase()}</h1>
+          <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>PROFESOR FIORI NICOLAS</h1>
           <span style={{ color: '#94a3b8', fontSize: '12px' }}>{usuario.email} {perfil?.rol === 'admin' && '👑 (ADMIN)'}</span>
         </div>
-        <button onClick={cerrarSesion} style={{ padding: '6px 12px', backgroundColor: '#334155', color: '#fca5a5', border: '1px solid #dc2626', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Salir</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <a href={`https://wa.me/${MI_WHATSAPP}?text=Hola,%20necesito%20soporte%20con%20la%20app.`} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', backgroundColor: '#16a34a', color: '#fff', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', textDecoration: 'none' }}>💬 Soporte</a>
+          <button onClick={cerrarSesion} style={{ padding: '6px 12px', backgroundColor: '#334155', color: '#fca5a5', border: '1px solid #dc2626', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Salir</button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -544,7 +547,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Pestaña Historial de Clases */}
       {pestaña === 'historialClases' && (
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>📖 Historial de Clases Guardadas</h3>
