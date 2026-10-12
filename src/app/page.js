@@ -34,7 +34,7 @@ export default function Home() {
   const [nuevoAnuncioAdmin, setNuevoAnuncioAdmin] = useState('')
   const [listaProfesAdmin, setListaProfesAdmin] = useState([])
 
-  // Estados para el módulo de Agenda y Campanita de Notificaciones
+  // Estados para Agenda y Campanita
   const [agendaEventos, setAgendaEventos] = useState([])
   const [tipoEvento, setTipoEvento] = useState('Evaluación')
   const [tituloEvento, setTituloEvento] = useState('')
@@ -213,6 +213,10 @@ export default function Home() {
     if (diff === 0) return '¡HOY!'
     if (diff === 1) return 'Mañana'
     return `En ${diff} días`
+  }
+
+  const exportarPDF = () => {
+    window.print()
   }
 
   useEffect(() => {
@@ -638,7 +642,11 @@ export default function Home() {
 
       {pestaña === 'historialClases' && (
         <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>📖 Historial de Clases Guardadas</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h3 style={{ color: '#93c5fd', margin: 0 }}>📖 Historial de Clases Guardadas</h3>
+            <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+          </div>
+
           {historialClases.length === 0 ? (
             <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>No hay cierres de clase registrados en este curso todavía.</p>
           ) : (
@@ -662,7 +670,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Pestaña Agenda con Selector de Categorías */}
       {pestaña === 'agendar' && (
         <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
           <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📅 Agendar Fechas e Insumos</h3>
@@ -729,7 +736,11 @@ export default function Home() {
 
       {pestaña === 'calificaciones' && (
         <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '15px' }}>Calificaciones por Núcleos</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h3 style={{ color: '#93c5fd', margin: 0 }}>Calificaciones por Núcleos</h3>
+            <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+          </div>
+
           {alumnos.map((a) => (
             <div key={a.id} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', marginBottom: '15px', border: '1px solid #334155' }}>
               <h4 style={{ color: '#60a5fa', marginBottom: '10px' }}>{a.apellido}, {a.nombre}</h4>
@@ -760,7 +771,11 @@ export default function Home() {
 
       {pestaña === 'informeAlumno' && (
         <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>👤 Informe Individual por Alumno</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h3 style={{ color: '#60a5fa', margin: 0 }}>👤 Informe Individual por Alumno</h3>
+            <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+          </div>
+
           <select value={alumnoInformeId} onChange={(e) => setAlumnoInformeId(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #3b82f6', marginBottom: '15px' }}>
             {alumnos.map(a => <option key={a.id} value={a.id}>{a.apellido}, {a.nombre}</option>)}
           </select>
@@ -788,7 +803,10 @@ export default function Home() {
 
       {pestaña === 'informeCurso' && (
         <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📊 Informe General del Curso</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h3 style={{ color: '#60a5fa', margin: 0 }}>📊 Informe General del Curso</h3>
+            <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+          </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
