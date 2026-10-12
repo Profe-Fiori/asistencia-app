@@ -34,6 +34,14 @@ export default function Home() {
   const [nuevoAnuncioAdmin, setNuevoAnuncioAdmin] = useState('')
   const [listaProfesAdmin, setListaProfesAdmin] = useState([])
 
+  // Estados para el módulo de Agenda y Campanita de Notificaciones
+  const [agendaEventos, setAgendaEventos] = useState([])
+  const [tipoEvento, setTipoEvento] = useState('Evaluación')
+  const [tituloEvento, setTituloEvento] = useState('')
+  const [fechaEvento, setFechaEvento] = useState(new Date().toISOString().split('T')[0])
+  const [cursoEventoId, setCursoEventoId] = useState('')
+  const [mostrarAlertas, setMostrarAlertas] = useState(false)
+
   const logoSrc = "/icon.png"
   const MI_WHATSAPP = "5493516826342"
 
@@ -104,12 +112,15 @@ export default function Home() {
       if (data && data.length > 0) {
         setCursos(data)
         setCursoSeleccionado(data[0].id)
+        setCursoEventoId(data[0].id)
       } else {
         setCursos([])
         setCursoSeleccionado('')
+        setCursoEventoId('')
       }
     }
     cargarCursos()
+    cargarAgenda()
   }, [usuario])
 
   useEffect(() => {
@@ -161,6 +172,48 @@ export default function Home() {
     }
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
+
+  const cargarAgenda = async () => {
+    const { data } = await supabase.from('agenda').select('*, cursos(nombre)').order('fecha', { ascending: true })
+    if (data) setAgendaEventos(data)
+  }
+
+  const guardarEventoAgenda = async () => {
+    if (!tituloEvento.trim() || !cursoEventoId) {
+      alert('Por favor completá el detalle y seleccioná un curso.')
+      return
+    }
+    const { error } = await supabase.from('agenda').insert([
+      { tipo: tipoEvento, titulo: tituloEvento, fecha: fechaEvento, curso_id: cursoEventoId, user_id: usuario.id }
+    ])
+
+    if (error) {
+      alert('Error al agendar: ' + error.message)
+    } else {
+      alert('¡Agendado con éxito!')
+      setTituloEvento('')
+      cargarAgenda()
+    }
+  }
+
+  const eliminarEventoAgenda = async (id) => {
+    if (confirm('¿Eliminar esta entrada de la agenda?')) {
+      await supabase.from('agenda').delete().eq('id', id)
+      cargarAgenda()
+    }
+  }
+
+  const hoyStr = new Date().toISOString().split('T')[0]
+  const eventosPendientes = agendaEventos.filter(ev => ev.fecha >= hoyStr)
+
+  const calcularDiasFaltantes = (fechaEv) => {
+    const fHoy = new Date(hoyStr)
+    const fEv = new Date(fechaEv)
+    const diff = Math.ceil((fEv - fHoy) / (1000 * 60 * 60 * 24))
+    if (diff === 0) return '¡HOY!'
+    if (diff === 1) return 'Mañana'
+    return `En ${diff} días`
+  }
 
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && usuario) {
@@ -433,15 +486,50 @@ export default function Home() {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #2563eb', paddingBottom: '12px', position: 'relative' }}>
         <div>
           <h1 style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px', margin: 0 }}>PROFESOR FIORI NICOLAS</h1>
           <span style={{ color: '#94a3b8', fontSize: '12px' }}>{usuario.email} {perfil?.rol === 'admin' && '👑 (ADMIN)'}</span>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          
+          <button onClick={() => setMostrarAlertas(!mostrarAlertas)} style={{ position: 'relative', padding: '6px 12px', backgroundColor: '#1e293b', border: '1px solid #3b82f6', borderRadius: '6px', color: '#fff', fontSize: '16px', cursor: 'pointer' }}>
+            🔔
+            {eventosPendientes.length > 0 && (
+              <span style={{ position: 'absolute', top: '-5px', right: '-5px', backgroundColor: '#dc2626', color: '#fff', fontSize: '10px', fontWeight: 'bold', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {eventosPendientes.length}
+              </span>
+            )}
+          </button>
+
           <a href={`https://wa.me/${MI_WHATSAPP}?text=Hola,%20necesito%20soporte%20con%20la%20app.`} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', backgroundColor: '#16a34a', color: '#fff', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', textDecoration: 'none' }}>💬 Soporte</a>
           <button onClick={cerrarSesion} style={{ padding: '6px 12px', backgroundColor: '#334155', color: '#fca5a5', border: '1px solid #dc2626', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Salir</button>
         </div>
+
+        {mostrarAlertas && (
+          <div style={{ position: 'absolute', top: '55px', right: 0, width: '310px', backgroundColor: '#1e293b', border: '1px solid #3b82f6', borderRadius: '8px', padding: '15px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>
+              <span style={{ fontWeight: 'bold', color: '#60a5fa', fontSize: '13px' }}>🔔 Eventos y Evaluaciones</span>
+              <span onClick={() => setMostrarAlertas(false)} style={{ cursor: 'pointer', color: '#94a3b8', fontSize: '12px' }}>✖</span>
+            </div>
+            {eventosPendientes.length === 0 ? (
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No hay fechas próximas agendadas.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
+                {eventosPendientes.map(ev => (
+                  <div key={ev.id} style={{ backgroundColor: '#0f172a', padding: '8px 10px', borderRadius: '6px', borderLeft: '3px solid #eab308' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#60a5fa' }}>[{ev.tipo || 'Evaluación'}]</div>
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#fff' }}>{ev.titulo}</div>
+                    <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>🏫 {ev.cursos?.nombre || 'Curso'}</span>
+                      <span style={{ color: '#fde047', fontWeight: 'bold' }}>{calcularDiasFaltantes(ev.fecha)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -457,6 +545,7 @@ export default function Home() {
         <button onClick={() => setPestaña('participacion')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Puntos</button>
         <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>⚡ Cierre</button>
         <button onClick={() => setPestaña('historialClases')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'historialClases' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📖 Historial</button>
+        <button onClick={() => setPestaña('agendar')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'agendar' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📅 Agendar</button>
         <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Notas</button>
         <button onClick={() => setPestaña('informeAlumno')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'informeAlumno' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>👤 Alumno</button>
         <button onClick={() => setPestaña('informeCurso')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'informeCurso' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📊 Curso</button>
@@ -566,6 +655,71 @@ export default function Home() {
                   <div style={{ marginTop: '8px', fontSize: '12px', color: '#93c5fd' }}>
                     Puntos clase: +{cls.puntos_pos || 0} / -{cls.puntos_neg || 0}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pestaña Agenda con Selector de Categorías */}
+      {pestaña === 'agendar' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📅 Agendar Fechas e Insumos</h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
+            
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Tipo de Fecha</label>
+                <select value={tipoEvento} onChange={(e) => setTipoEvento(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }}>
+                  <option value="Evaluación">📝 Evaluación</option>
+                  <option value="Recuperatorio">🔄 Recuperatorio</option>
+                  <option value="Evento">🎉 Evento / Jornada</option>
+                  <option value="Clase Especial">⭐ Clase Especial / Taller</option>
+                </select>
+              </div>
+
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Seleccionar Curso</label>
+                <select value={cursoEventoId} onChange={(e) => setCursoEventoId(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }}>
+                  {cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Fecha Programada</label>
+                <input type="date" value={fechaEvento} onChange={(e) => setFechaEvento(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Detalle / Temario / Indicaciones</label>
+              <textarea value={tituloEvento} onChange={(e) => setTituloEvento(e.target.value)} placeholder="Ej: Evaluación de Vóley / Día del Estudiante en el predio / Recuperatorio 1 de Educación Física" style={{ width: '100%', height: '70px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+            </div>
+
+            <button onClick={guardarEventoAgenda} style={{ padding: '12px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '8px' }}>
+              📌 Guardar en la Agenda
+            </button>
+          </div>
+
+          <h4 style={{ color: '#93c5fd', marginBottom: '10px' }}>Próximas Fechas Agendadas:</h4>
+          {agendaEventos.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '13px' }}>No hay registros agendados aún.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {agendaEventos.map((ev) => (
+                <div key={ev.id} style={{ padding: '12px', backgroundColor: '#0f172a', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                  <div>
+                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#60a5fa', display: 'block' }}>[{ev.tipo || 'Evaluación'}]</span>
+                    <span style={{ fontWeight: 'bold', color: '#fff', fontSize: '14px' }}>{ev.titulo}</span>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                      🏫 <strong>{ev.cursos?.nombre || 'Curso'}</strong> | 📅 {ev.fecha}
+                    </div>
+                  </div>
+                  <button onClick={() => eliminarEventoAgenda(ev.id)} style={{ padding: '6px 10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Borrar</button>
                 </div>
               ))}
             </div>
