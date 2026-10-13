@@ -123,6 +123,27 @@ export default function Home() {
     cargarAgenda()
   }, [usuario])
 
+  const cargarHistorialClasesGuardadas = async (cId) => {
+    if (!cId) return
+    const { data: cls } = await supabase.from('clases').select('*').eq('curso_id', cId).order('fecha', { ascending: false })
+    if (cls) {
+      setHistorialClases(cls)
+      let tPres = 0
+      let tAus = 0
+      let pPos = 0
+      let pNeg = 0
+      cls.forEach(c => {
+        tPres += (c.presentes || 0)
+        tAus += (c.ausentes || 0)
+        pPos += (c.puntos_pos || 0)
+        pNeg += (c.puntos_neg || 0)
+      })
+      setInformeCursoStats({ totalClases: cls.length, presentismos: tPres, ausentismos: tAus, ptsPos: pPos, ptsNeg: pNeg })
+    } else {
+      setHistorialClases([])
+    }
+  }
+
   useEffect(() => {
     if (!cursoSeleccionado || !usuario) return
     async function cargarDatosCurso() {
@@ -154,21 +175,7 @@ export default function Home() {
         }
       }
 
-      const { data: cls } = await supabase.from('clases').select('*').eq('curso_id', cursoSeleccionado).order('fecha', { ascending: false })
-      if (cls) {
-        setHistorialClases(cls)
-        let tPres = 0
-        let tAus = 0
-        let pPos = 0
-        let pNeg = 0
-        cls.forEach(c => {
-          tPres += (c.presentes || 0)
-          tAus += (c.ausentes || 0)
-          pPos += (c.puntos_pos || 0)
-          pNeg += (c.puntos_neg || 0)
-        })
-        setInformeCursoStats({ totalClases: cls.length, presentismos: tPres, ausentismos: tAus, ptsPos: pPos, ptsNeg: pNeg })
-      }
+      await cargarHistorialClasesGuardadas(cursoSeleccionado)
     }
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
@@ -405,6 +412,7 @@ export default function Home() {
       setContenidoClase('')
       setActividadesClase('')
       setObsClase('')
+      await cargarHistorialClasesGuardadas(cursoSeleccionado)
       setPestaña('historialClases')
     }
   }
