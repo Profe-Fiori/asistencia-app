@@ -24,7 +24,7 @@ export default function Home() {
   const [resumenFecha, setResumenFecha] = useState([])
   const [alumnoInformeId, setAlumnoInformeId] = useState('')
   const [historialAlumno, setHistorialAlumno] = useState([])
-  const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0, ptsPos: 0, ptsNeg: 0 })
+  const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0 })
   const [historialClases, setHistorialClases] = useState([])
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
@@ -41,6 +41,12 @@ export default function Home() {
   const [fechaEvento, setFechaEvento] = useState(new Date().toISOString().split('T')[0])
   const [cursoEventoId, setCursoEventoId] = useState('')
   const [mostrarAlertas, setMostrarAlertas] = useState(false)
+
+  // Estados para Ausentismo Docente (Aus Doc)
+  const [fechaAusencia, setFechaAusencia] = useState(new Date().toISOString().split('T')[0])
+  const [tipoAusencia, setTipoAusencia] = useState('CM')
+  const [motivoAusencia, setMotivoAusencia] = useState('')
+  const [historialAusencias, setHistorialAusencias] = useState([])
 
   const logoSrc = "/icon.png"
   const MI_WHATSAPP = "5493516826342"
@@ -121,6 +127,7 @@ export default function Home() {
     }
     cargarCursos()
     cargarAgenda()
+    cargarAusenciasDocentes()
   }, [usuario])
 
   const cargarHistorialClasesGuardadas = async (cId) => {
@@ -130,15 +137,11 @@ export default function Home() {
       setHistorialClases(cls)
       let tPres = 0
       let tAus = 0
-      let pPos = 0
-      let pNeg = 0
       cls.forEach(c => {
         tPres += (c.presentes || 0)
         tAus += (c.ausentes || 0)
-        pPos += (c.puntos_pos || 0)
-        pNeg += (c.puntos_neg || 0)
       })
-      setInformeCursoStats({ totalClases: cls.length, presentismos: tPres, ausentismos: tAus, ptsPos: pPos, ptsNeg: pNeg })
+      setInformeCursoStats({ totalClases: cls.length, presentismos: tPres, ausentismos: tAus })
     } else {
       setHistorialClases([])
     }
@@ -207,6 +210,37 @@ export default function Home() {
     if (confirm('¿Eliminar esta entrada de la agenda?')) {
       await supabase.from('agenda').delete().eq('id', id)
       cargarAgenda()
+    }
+  }
+
+  // Funciones para Ausentismo Docente (Aus Doc)
+  const cargarAusenciasDocentes = async () => {
+    const { data } = await supabase.from('licencias_docentes').select('*').order('fecha', { ascending: false })
+    if (data) setHistorialAusencias(data)
+  }
+
+  const registrarAusenciaDocente = async () => {
+    if (!motivoAusencia.trim()) {
+      alert('Por favor ingresá el motivo de la inasistencia.')
+      return
+    }
+    const { error } = await supabase.from('licencias_docentes').insert([
+      { fecha: fechaAusencia, tipo: tipoAusencia, motivo: motivoAusencia, user_id: usuario.id }
+    ])
+
+    if (error) {
+      alert('Error al registrar: ' + error.message)
+    } else {
+      alert('¡Inasistencia registrada!')
+      setMotivoAusencia('')
+      cargarAusenciasDocentes()
+    }
+  }
+
+  const eliminarAusenciaDocente = async (id) => {
+    if (confirm('¿Eliminar esta inasistencia del registro?')) {
+      await supabase.from('licencias_docentes').delete().eq('id', id)
+      cargarAusenciasDocentes()
     }
   }
 
@@ -391,24 +425,17 @@ export default function Home() {
       else if (est === 'AUSENTE') cantAusentes++
     })
 
-    let pos = 0
-    let neg = 0
-    Object.values(conteos).forEach(v => {
-      if (v > 0) pos += v
-      if (v < 0) neg += Math.abs(v)
-    })
-
     const registrosAsis = Object.entries(asistencias).map(([alumno_id, estado]) => ({ alumno_id, fecha, estado }))
     await supabase.from('asistencias').upsert(registrosAsis, { onConflict: ['alumno_id', 'fecha'] })
 
     const { error } = await supabase.from('clases').insert([
-      { curso_id: cursoSeleccionado, fecha, contenido: contenidoClase || 'Clase regular', actividades: actividadesClase, observaciones: obsClase, presentes: cantPresentes, ausentes: cantAusentes, puntos_pos: pos, puntos_neg: neg, user_id: usuario.id }
+      { curso_id: cursoSeleccionado, fecha, contenido: contenidoClase || 'Clase regular', actividades: actividadesClase, observaciones: obsClase, presentes: cantPresentes, ausentes: cantAusentes, user_id: usuario.id }
     ])
 
     if (error) {
       alert('Error: ' + error.message)
     } else {
-      alert(`¡Cierre Exitoso!\n👥 ${cantPresentes} Presentes | ❌ ${cantAusentes} Ausentes`)
+      alert(`¡Registro Guardado en Libro de Tema!\n👥 ${cantPresentes} Presentes | ❌ ${cantAusentes} Ausentes`)
       setContenidoClase('')
       setActividadesClase('')
       setObsClase('')
@@ -555,9 +582,10 @@ export default function Home() {
         <button onClick={() => setPestaña('asistencia')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'asistencia' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Tomar</button>
         <button onClick={() => setPestaña('resumen')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'resumen' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Ver Asis</button>
         <button onClick={() => setPestaña('participacion')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'participacion' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Puntos</button>
-        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>⚡ Cierre</button>
+        <button onClick={() => setPestaña('cierreClase')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'cierreClase' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>⚡ Libro de Tema</button>
         <button onClick={() => setPestaña('historialClases')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'historialClases' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📖 Historial</button>
         <button onClick={() => setPestaña('agendar')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'agendar' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📅 Agendar</button>
+        <button onClick={() => setPestaña('ausDoc')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'ausDoc' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📖 Aus Doc</button>
         <button onClick={() => setPestaña('calificaciones')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'calificaciones' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>Notas</button>
         <button onClick={() => setPestaña('informeAlumno')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'informeAlumno' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>👤 Alumno</button>
         <button onClick={() => setPestaña('informeCurso')} style={{ padding: '8px 5px', borderRadius: '6px', backgroundColor: pestaña === 'informeCurso' ? '#2563eb' : '#1e293b', color: '#fff', border: '1px solid #334155', fontWeight: 'bold', fontSize: '10px', flex: 1 }}>📊 Curso</button>
@@ -623,27 +651,21 @@ export default function Home() {
 
       {pestaña === 'cierreClase' && (
         <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
-          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>⚡ Cierre y Resumen de Clase - {fecha}</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>⚡ Registro Libro de Tema - {fecha}</h3>
+          <div style={{ marginBottom: '15px' }}>
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
-              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Presentes / Ausentes</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Asistencia del Grupo</span>
               <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac' }}>
-                {Object.values(asistencias).filter(e => e === 'PRESENTE').length} ✅ / {Object.values(asistencias).filter(e => e === 'AUSENTE').length} ❌
-              </span>
-            </div>
-            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
-              <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Puntos Otorgados</span>
-              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#60a5fa' }}>
-                +{Object.values(conteos).filter(v => v > 0).reduce((a,b)=>a+b,0)} / -{Object.values(conteos).filter(v => v < 0).reduce((a,b)=>a+Math.abs(b),0)}
+                {Object.values(asistencias).filter(e => e === 'PRESENTE').length} ✅ Presentes / {Object.values(asistencias).filter(e => e === 'AUSENTE').length} ❌ Ausentes
               </span>
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <input type="text" value={contenidoClase} onChange={(e) => setContenidoClase(e.target.value)} placeholder="Contenido trabajado..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
-            <textarea value={actividadesClase} onChange={(e) => setActividadesClase(e.target.value)} placeholder="Actividades..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', height: '60px' }} />
-            <input type="text" value={obsClase} onChange={(e) => setObsClase(e.target.value)} placeholder="Observaciones..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
-            <button onClick={ejecutarCierreDeClase} style={{ padding: '16px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '10px' }}>🔒 Confirmar y Guardar Cierre</button>
+            <input type="text" value={contenidoClase} onChange={(e) => setContenidoClase(e.target.value)} placeholder="Contenido trabajado / Tema..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
+            <textarea value={actividadesClase} onChange={(e) => setActividadesClase(e.target.value)} placeholder="Actividades desarrolladas..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155', height: '60px' }} />
+            <input type="text" value={obsClase} onChange={(e) => setObsClase(e.target.value)} placeholder="Observaciones pedagógicas..." style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
+            <button onClick={ejecutarCierreDeClase} style={{ padding: '16px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '10px' }}>🔒 Guardar en Libro de Tema</button>
           </div>
         </div>
       )}
@@ -665,12 +687,9 @@ export default function Home() {
                     <span style={{ fontWeight: 'bold', color: '#60a5fa' }}>📅 {cls.fecha}</span>
                     <span style={{ fontSize: '12px', color: '#86efac' }}>👥 {cls.presentes || 0} Pres. | ❌ {cls.ausentes || 0} Aus.</span>
                   </div>
-                  <p style={{ margin: '6px 0', fontSize: '14px' }}><strong>Contenido:</strong> {cls.contenido || 'Sin contenido especificado'}</p>
+                  <p style={{ margin: '6px 0', fontSize: '14px' }}><strong>Tema:</strong> {cls.contenido || 'Sin contenido especificado'}</p>
                   {cls.actividades && <p style={{ margin: '6px 0', fontSize: '13px', color: '#cbd5e1' }}><strong>Actividades:</strong> {cls.actividades}</p>}
                   {cls.observaciones && <p style={{ margin: '6px 0', fontSize: '13px', color: '#94a3b8' }}><strong>Observaciones:</strong> {cls.observaciones}</p>}
-                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#93c5fd' }}>
-                    Puntos clase: +{cls.puntos_pos || 0} / -{cls.puntos_neg || 0}
-                  </div>
                 </div>
               ))}
             </div>
@@ -735,6 +754,61 @@ export default function Home() {
                     </div>
                   </div>
                   <button onClick={() => eliminarEventoAgenda(ev.id)} style={{ padding: '6px 10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Borrar</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {pestaña === 'ausDoc' && (
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+          <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📖 Registro de Ausentismo Docente</h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Fecha de la Inasistencia</label>
+                <input type="date" value={fechaAusencia} onChange={(e) => setFechaAusencia(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+              </div>
+
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Tipo / Artículo de Licencia</label>
+                <select value={tipoAusencia} onChange={(e) => setTipoAusencia(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }}>
+                  <option value="CM">🏥 CM - Carpeta Médica</option>
+                  <option value="RP">👤 RP - Razones Particulares</option>
+                  <option value="CAP">📚 CAP - Capacitación / Perfeccionamiento</option>
+                  <option value="ACT">🏫 ACT - Actividad Escolar / Torneo</option>
+                  <option value="OTRO">❓ OTRO - Otro Motivo</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Razón / Justificación / Certificado</label>
+              <textarea value={motivoAusencia} onChange={(e) => setMotivoAusencia(e.target.value)} placeholder="Ej: Certificado médico presentado en secretaría / Jornada institucional en otra escuela" style={{ width: '100%', height: '70px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+            </div>
+
+            <button onClick={registrarAusenciaDocente} style={{ padding: '12px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '8px' }}>
+              💾 Registrar Inasistencia
+            </button>
+          </div>
+
+          <h4 style={{ color: '#93c5fd', marginBottom: '10px' }}>Historial de Inasistencias Docentes:</h4>
+          {historialAusencias.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '13px' }}>No hay inasistencias registradas.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {historialAusencias.map((aus) => (
+                <div key={aus.id} style={{ padding: '12px', backgroundColor: '#0f172a', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                  <div>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#fca5a5', display: 'block' }}>📌 Tipo: {aus.tipo}</span>
+                    <span style={{ color: '#fff', fontSize: '13px' }}>{aus.motivo}</span>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                      📅 Fecha: {aus.fecha}
+                    </div>
+                  </div>
+                  <button onClick={() => eliminarAusenciaDocente(aus.id)} style={{ padding: '6px 10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Borrar</button>
                 </div>
               ))}
             </div>
@@ -832,12 +906,6 @@ export default function Home() {
               <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Global Curso</span>
               <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
                 {informeCursoStats.presentismos} ✅ / {informeCursoStats.ausentismos} ❌
-              </p>
-            </div>
-            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Balance Puntos Grupo</span>
-              <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#60a5fa', margin: '5px 0 0 0' }}>
-                +{informeCursoStats.ptsPos} / -{informeCursoStats.ptsNeg}
               </p>
             </div>
           </div>
