@@ -24,7 +24,7 @@ export default function Home() {
   const [resumenFecha, setResumenFecha] = useState([])
   const [alumnoInformeId, setAlumnoInformeId] = useState('')
   const [historialAlumno, setHistorialAlumno] = useState([])
-  const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0 })
+  const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0, pctAsistencia: 0, pctAprobados: 0 })
   const [historialClases, setHistorialClases] = useState([])
   const [nuevoCursoNombre, setNuevoCursoNombre] = useState('')
   const [nuevoAlumnoApellido, setNuevoAlumnoApellido] = useState('')
@@ -141,7 +141,16 @@ export default function Home() {
         tPres += (c.presentes || 0)
         tAus += (c.ausentes || 0)
       })
-      setInformeCursoStats({ totalClases: cls.length, presentismos: tPres, ausentismos: tAus })
+      const totalAsis = tPres + tAus
+      const pctA = totalAsis > 0 ? Math.round((tPres / totalAsis) * 100) : 0
+
+      setInformeCursoStats(prev => ({
+        ...prev,
+        totalClases: cls.length,
+        presentismos: tPres,
+        ausentismos: tAus,
+        pctAsistencia: pctA
+      }))
     } else {
       setHistorialClases([])
     }
@@ -170,11 +179,22 @@ export default function Home() {
         if (alumnoIds.length > 0) {
           const { data: cals } = await supabase.from('calificaciones').select('*').in('alumno_id', alumnoIds)
           const mapaCals = {}
+          let totalNotasFinales = 0
+          let notasAprobadas = 0
+
           ;(cals || []).forEach(c => {
             if (!mapaCals[c.alumno_id]) mapaCals[c.alumno_id] = {}
             mapaCals[c.alumno_id][c.nucleo] = c
+
+            if (c.nota_final !== null && c.nota_final !== undefined) {
+              totalNotasFinales++
+              if (c.nota_final >= 6) notasAprobadas++
+            }
           })
           setCalificacionesCurso(mapaCals)
+
+          const pctApr = totalNotasFinales > 0 ? Math.round((notasAprobadas / totalNotasFinales) * 100) : 0
+          setInformeCursoStats(prev => ({ ...prev, pctAprobados: pctApr }))
         }
       }
 
@@ -213,7 +233,6 @@ export default function Home() {
     }
   }
 
-  // Funciones para Ausentismo Docente (Aus Doc)
   const cargarAusenciasDocentes = async () => {
     const { data } = await supabase.from('licencias_docentes').select('*').order('fecha', { ascending: false })
     if (data) setHistorialAusencias(data)
@@ -864,18 +883,50 @@ export default function Home() {
 
           {alumnoInformeId && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-                <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Total</span>
-                  <p style={{ fontSize: '18px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
-                    {historialAlumno.asistencias?.filter(a => a.estado === 'PRESENTE').length || 0} Pres. / {historialAlumno.asistencias?.filter(a => a.estado === 'AUSENTE').length || 0} Aus.
-                  </p>
+              {/* Asistencia Total */}
+              <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', marginBottom: '15px', border: '1px solid #334155' }}>
+                <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Total Acumulada</span>
+                <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '5px 0 0 0' }}>
+                  <span style={{ color: '#86efac' }}>{historialAlumno.asistencias?.filter(a => a.estado === 'PRESENTE').length || 0} Presentes</span>
+                  {' / '}
+                  <span style={{ color: '#fca5a5' }}>{historialAlumno.asistencias?.filter(a => a.estado === 'AUSENTE').length || 0} Ausentes</span>
+                </p>
+              </div>
+
+              {/* Puntos Acumulados por Núcleo */}
+              <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #334155' }}>
+                <h4 style={{ color: '#93c5fd', fontSize: '13px', margin: '0 0 10px 0' }}>⭐ Puntos Acumulados por Núcleo:</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {[1, 2, 3, 4, 5, 6].map(nuc => {
+                    const ptsTotal = historialAlumno.puntos?.reduce((a, b) => a + (b.cantidad || 0), 0) || 0
+                    return (
+                      <div key={nuc} style={{ backgroundColor: '#1e293b', padding: '8px', borderRadius: '6px', textAlign: 'center', border: '1px solid #334155' }}>
+                        <span style={{ fontSize: '10px', color: '#cbd5e1', display: 'block' }}>Núcleo {nuc}</span>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{ptsTotal} pts</span>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>Puntos Acumulados</span>
-                  <p style={{ fontSize: '18px', fontWeight: 'bold', color: '#60a5fa', margin: '5px 0 0 0' }}>
-                    {historialAlumno.puntos?.reduce((a, b) => a + (b.cantidad || 0), 0) || 0} pts
-                  </p>
+              </div>
+
+              {/* Notas por Núcleo */}
+              <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', border: '1px solid #334155' }}>
+                <h4 style={{ color: '#93c5fd', fontSize: '13px', margin: '0 0 10px 0' }}>📝 Estado de Calificaciones por Núcleo:</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[1, 2, 3, 4, 5, 6].map(nuc => {
+                    const n = calificacionesCurso[alumnoInformeId]?.[nuc] || {}
+                    return (
+                      <div key={nuc} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: '8px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>Núcleo {nuc}</span>
+                        <div style={{ display: 'flex', gap: '10px', color: '#94a3b8' }}>
+                          <span>Reg: <strong style={{ color: '#fff' }}>{n.nota_regular ?? '-'}</strong></span>
+                          <span>R1: <strong style={{ color: '#fff' }}>{n.recu_1 ?? '-'}</strong></span>
+                          <span>R2: <strong style={{ color: '#fff' }}>{n.recu_2 ?? '-'}</strong></span>
+                          <span style={{ color: '#60a5fa' }}>Final: <strong style={{ color: '#86efac' }}>{n.nota_final ?? '-'}</strong></span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -891,22 +942,30 @@ export default function Home() {
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
               <span style={{ color: '#94a3b8', fontSize: '12px' }}>Total Alumnos</span>
               <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#3b82f6', margin: '5px 0 0 0' }}>{alumnos.length}</p>
             </div>
-            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Clases Registradas</span>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Clases Impartidas</span>
               <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#4ade80', margin: '5px 0 0 0' }}>{informeCursoStats.totalClases}</p>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-              <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Global Curso</span>
-              <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
-                {informeCursoStats.presentismos} ✅ / {informeCursoStats.ausentismos} ❌
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>% Asistencia del Curso</span>
+              <p style={{ fontSize: '22px', fontWeight: 'bold', color: '#86efac', margin: '5px 0 0 0' }}>
+                {informeCursoStats.pctAsistencia}%
               </p>
+              <span style={{ fontSize: '10px', color: '#64748b' }}>({informeCursoStats.presentismos} Pres / {informeCursoStats.ausentismos} Aus)</span>
+            </div>
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>% Aprobados (Notas $\ge$ 6)</span>
+              <p style={{ fontSize: '22px', fontWeight: 'bold', color: '#60a5fa', margin: '5px 0 0 0' }}>
+                {informeCursoStats.pctAprobados}%
+              </p>
+              <span style={{ fontSize: '10px', color: '#64748b' }}>(Sobre notas finales registradas)</span>
             </div>
           </div>
         </div>
