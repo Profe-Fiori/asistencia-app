@@ -21,7 +21,11 @@ export default function Home() {
   const [actividadesClase, setActividadesClase] = useState('')
   const [obsClase, setObsClase] = useState('')
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
-  const [resumenFecha, setResumenFecha] = useState([])
+  
+  // Estados para la planilla matriz de "Ver Asis"
+  const [fechasMatriz, setFechasMatriz] = useState([])
+  const [registrosMatriz, setRegistrosMatriz] = useState([])
+
   const [alumnoInformeId, setAlumnoInformeId] = useState('')
   const [historialAlumno, setHistorialAlumno] = useState([])
   const [informeCursoStats, setInformeCursoStats] = useState({ totalClases: 0, presentismos: 0, ausentismos: 0, pctAsistencia: 0, pctAprobados: 0 })
@@ -203,6 +207,27 @@ export default function Home() {
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
 
+  // Cargar Matriz Completa para "Ver Asis" cuando se active la pestaña
+  useEffect(() => {
+    if (pestaña === 'resumen' && cursoSeleccionado && usuario && alumnos.length > 0) {
+      async function cargarMatrizAsistencias() {
+        const alumnoIds = alumnos.map(a => a.id)
+        const { data: asisData } = await supabase
+          .from('asistencias')
+          .select('*')
+          .in('alumno_id', alumnoIds)
+          .order('fecha', { ascending: true })
+
+        if (asisData) {
+          const setFechas = [...new Set(asisData.map(item => item.fecha))]
+          setFechasMatriz(setFechas)
+          setRegistrosMatriz(asisData)
+        }
+      }
+      cargarMatrizAsistencias()
+    }
+  }, [pestaña, cursoSeleccionado, alumnos, usuario])
+
   const cargarAgenda = async () => {
     const { data } = await supabase.from('agenda').select('*, cursos(nombre)').order('fecha', { ascending: true })
     if (data) setAgendaEventos(data)
@@ -278,16 +303,6 @@ export default function Home() {
   const exportarPDF = () => {
     window.print()
   }
-
-  useEffect(() => {
-    if (pestaña === 'resumen' && cursoSeleccionado && usuario) {
-      async function cargarResumenPorFecha() {
-        const { data } = await supabase.from('asistencias').select('*, alumnos!inner(curso_id, apellido, nombre)').eq('fecha', fecha).eq('alumnos.curso_id', cursoSeleccionado)
-        if (data) setResumenFecha(data)
-      }
-      cargarResumenPorFecha()
-    }
-  }, [pestaña, fecha, cursoSeleccionado, usuario])
 
   useEffect(() => {
     if (pestaña === 'informeAlumno' && alumnoInformeId) {
@@ -409,19 +424,17 @@ export default function Home() {
     }
   }
 
+  // Clic en asistencia: Alterna PRESENTE -> TARDE -> AUSENTE -> PRESENTE
   const toggleEstado = (id) => {
-    setAsistencias((prev) => ({
-      ...prev,
-      [id]: prev[id] === 'PRESENTE' ? 'AUSENTE' : 'PRESENTE',
-    }))
-  }
+    setAsistencias((prev) => {
+      const actual = prev[id] || 'PRESENTE'
+      let siguiente = 'PRESENTE'
+      if (actual === 'PRESENTE') siguiente = 'TARDE'
+      else if (actual === 'TARDE') siguiente = 'AUSENTE'
+      else if (actual === 'AUSENTE') siguiente = 'PRESENTE'
 
-  const cambiarConteo = async (alumno_id, delta) => {
-    const valorActual = conteos[alumno_id] || 0
-    const nuevoValor = valorActual + delta
-    setConteos((prev) => ({ ...prev, [alumno_id]: nuevoValor }))
-
-    await supabase.from('conteo_participaciones').upsert({ alumno_id, fecha, cantidad: nuevoValor }, { onConflict: ['alumno_id', 'fecha'] })
+      return { ...prev, [id]: siguiente }
+    })
   }
 
   const guardarAsistencias = async () => {
@@ -440,7 +453,7 @@ export default function Home() {
     let cantPresentes = 0
     let cantAusentes = 0
     Object.values(asistencias).forEach(est => {
-      if (est === 'PRESENTE') cantPresentes++
+      if (est === 'PRESENTE' || est === 'TARDE') cantPresentes++
       else if (est === 'AUSENTE') cantAusentes++
     })
 
@@ -454,7 +467,7 @@ export default function Home() {
     if (error) {
       alert('Error: ' + error.message)
     } else {
-      alert(`¡Registro Guardado en Libro de Tema!\n👥 ${cantPresentes} Presentes | ❌ ${cantAusentes} Ausentes`)
+      alert(`¡Registro Guardado en Libro de Tema!\n👥 ${cantPresentes} Presentes/Tarde | ❌ ${cantAusentes} Ausentes`)
       setContenidoClase('')
       setActividadesClase('')
       setObsClase('')
@@ -618,14 +631,21 @@ export default function Home() {
         <div>
           <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Tomar Asistencia ({alumnos.length} Alumnos) - {fecha}</h3>
           <ul style={{ listStyle: 'none', padding: 0 }}>
-            {alumnos.map((a) => (
-              <li key={a.id} style={{ padding: '14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
-                <span style={{ fontWeight: '500' }}>{a.apellido}, {a.nombre}</span>
-                <button onClick={() => toggleEstado(a.id)} style={{ padding: '8px 16px', borderRadius: '6px', backgroundColor: asistencias[a.id] === 'PRESENTE' ? '#2563eb' : '#64748b', color: '#ffffff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
-                  {asistencias[a.id] || 'PRESENTE'}
-                </button>
-              </li>
-            ))}
+            {alumnos.map((a) => {
+              const estadoActual = asistencias[a.id] || 'PRESENTE'
+              let colorFondo = '#2563eb' // PRESENTE
+              if (estadoActual === 'TARDE') colorFondo = '#ea580c' // NARANJA
+              else if (estadoActual === 'AUSENTE') colorFondo = '#dc2626' // ROJO
+
+              return (
+                <li key={a.id} style={{ padding: '14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
+                  <span style={{ fontWeight: '500' }}>{a.apellido}, {a.nombre}</span>
+                  <button onClick={() => toggleEstado(a.id)} style={{ padding: '8px 16px', borderRadius: '6px', backgroundColor: colorFondo, color: '#ffffff', border: 'none', fontWeight: 'bold', cursor: 'pointer', minWidth: '100px' }}>
+                    {estadoActual}
+                  </button>
+                </li>
+              )
+            })}
           </ul>
           <button onClick={guardarAsistencias} style={{ width: '100%', padding: '16px', marginTop: '20px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>
             Guardar Lista del Día
@@ -634,16 +654,62 @@ export default function Home() {
       )}
 
       {pestaña === 'resumen' && (
-        <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Asistencia Registrada - {fecha}</h3>
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {resumenFecha.map((r, index) => (
-              <li key={index} style={{ padding: '12px 14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
-                <span style={{ fontWeight: '500' }}>{r.alumnos.apellido}, {r.alumnos.nombre}</span>
-                <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: r.estado === 'PRESENTE' ? '#16a34a' : '#dc2626', color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }}>{r.estado}</span>
-              </li>
-            ))}
-          </ul>
+        <div style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h3 style={{ color: '#60a5fa', margin: 0 }}>📋 Planilla Mensual de Asistencia (Matriz)</h3>
+            <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+          </div>
+
+          {alumnos.length === 0 ? (
+            <p style={{ color: '#94a3b8' }}>No hay alumnos en este curso.</p>
+          ) : fechasMatriz.length === 0 ? (
+            <p style={{ color: '#94a3b8' }}>No hay asistencias registradas todavía para armar la planilla.</p>
+          ) : (
+            <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', color: '#fff', backgroundColor: '#0f172a' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#1e293b', borderBottom: '2px solid #3b82f6' }}>
+                    <th style={{ padding: '8px', textAlign: 'left', borderRight: '1px solid #334155', minWidth: '150px' }}>Apellido y Nombre</th>
+                    {fechasMatriz.map((f, idx) => {
+                      const partes = f.split('-')
+                      const formatoFecha = partes.length === 3 ? `${partes[2]}/${partes[1]}` : f
+                      return (
+                        <th key={idx} style={{ padding: '6px 4px', textAlign: 'center', borderRight: '1px solid #334155', minWidth: '40px', fontSize: '11px' }}>
+                          {formatoFecha}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {alumnos.map((a) => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid #334155' }}>
+                      <td style={{ padding: '8px', borderRight: '1px solid #334155', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                        {a.apellido}, {a.nombre}
+                      </td>
+                      {fechasMatriz.map((f, idx) => {
+                        const reg = registrosMatriz.find(r => r.alumno_id === a.id && r.fecha === f)
+                        const estado = reg ? reg.estado : ''
+                        return (
+                          <td key={idx} style={{ padding: '6px 4px', textAlign: 'center', borderRight: '1px solid #334155', fontWeight: 'bold' }}>
+                            {estado === 'PRESENTE' ? (
+                              <span style={{ color: '#86efac' }}>•</span>
+                            ) : estado === 'TARDE' ? (
+                              <span style={{ color: '#fb923c' }}>T</span>
+                            ) : estado === 'AUSENTE' ? (
+                              <span style={{ color: '#fca5a5' }}>A</span>
+                            ) : (
+                              <span style={{ color: '#475569' }}>-</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -675,7 +741,7 @@ export default function Home() {
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid #334155' }}>
               <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block' }}>Asistencia del Grupo</span>
               <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#86efac' }}>
-                {Object.values(asistencias).filter(e => e === 'PRESENTE').length} ✅ Presentes / {Object.values(asistencias).filter(e => e === 'AUSENTE').length} ❌ Ausentes
+                {Object.values(asistencias).filter(e => e === 'PRESENTE' || e === 'TARDE').length} ✅ Presentes/Tarde / {Object.values(asistencias).filter(e => e === 'AUSENTE').length} ❌ Ausentes
               </span>
             </div>
           </div>
@@ -888,6 +954,8 @@ export default function Home() {
                 <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Total Acumulada</span>
                 <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '5px 0 0 0' }}>
                   <span style={{ color: '#86efac' }}>{historialAlumno.asistencias?.filter(a => a.estado === 'PRESENTE').length || 0} Presentes</span>
+                  {' / '}
+                  <span style={{ color: '#fb923c' }}>{historialAlumno.asistencias?.filter(a => a.estado === 'TARDE').length || 0} Tarde</span>
                   {' / '}
                   <span style={{ color: '#fca5a5' }}>{historialAlumno.asistencias?.filter(a => a.estado === 'AUSENTE').length || 0} Ausentes</span>
                 </p>
