@@ -544,6 +544,24 @@ export default function Home() {
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
+      {/* Estilo integrado para ocultar la marca de agua de Netlify al imprimir o generar PDF */}
+      <style jsx global>{`
+        @media print {
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+          }
+          /* Oculta insignias o widgets flotantes de Netlify */
+          iframe[id*="netlify"], div[id*="netlify"], script + div {
+            display: none !important;
+          }
+          /* Asegura un margen inferior para que la tabla no llegue al borde exacto */
+          .print-container {
+            padding-bottom: 30px !important;
+          }
+        }
+      `}</style>
+
       {anuncioActivo && (
         <div style={{ backgroundColor: '#1e3a8a', color: '#93c5fd', padding: '10px 15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', border: '1px solid #3b82f6' }}>
           📢 <strong>Aviso:</strong> {anuncioActivo}
@@ -654,7 +672,7 @@ export default function Home() {
       )}
 
       {pestaña === 'resumen' && (
-        <div style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
+        <div className="print-container" style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155', paddingBottom: '35px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <h3 style={{ color: '#60a5fa', margin: 0 }}>📋 Planilla Mensual de Asistencia (Matriz)</h3>
             <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
@@ -1068,7 +1086,7 @@ export default function Home() {
 
               <div style={{ marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
                 <h4 style={{ color: '#cbd5e1', marginBottom: '8px' }}>📋 Carga Masiva (Excel/WhatsApp)</h4>
-                <textarea value={textoCargaMasiva} onChange={(e) => setTextoCargaMasiva(e.target.value)} placeholder="Pérez, Juan&#10;García, María" style={{ width: '100%', height: '80px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155', marginBottom: '8px' }} />
+                <textarea value={textoCargaMasiva} onChange={(e) => tTextoCargaMasiva ? null : setTextoCargaMasiva(e.target.value)} placeholder="Pérez, Juan&#10;García, María" style={{ width: '100%', height: '80px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155', marginBottom: '8px' }} />
                 <button onClick={procesarCargaMasiva} style={{ padding: '10px 16px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Importar Lista Completa</button>
               </div>
 
