@@ -22,7 +22,8 @@ export default function Home() {
   const [obsClase, setObsClase] = useState('')
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
   
-  // Estados para la planilla matriz de "Ver Asis"
+  // Estados para la planilla matriz de "Ver Asis" y filtro por mes (ej: '2026-08')
+  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7))
   const [fechasMatriz, setFechasMatriz] = useState([])
   const [registrosMatriz, setRegistrosMatriz] = useState([])
 
@@ -207,15 +208,18 @@ export default function Home() {
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
 
-  // Cargar Matriz Completa para "Ver Asis" cuando se active la pestaña
+  // Cargar Matriz filtrada por el mes seleccionado para "Ver Asis"
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && usuario && alumnos.length > 0) {
       async function cargarMatrizAsistencias() {
         const alumnoIds = alumnos.map(a => a.id)
+        
+        // Consultamos las asistencias que comiencen con el año y mes elegido (ej: '2026-08')
         const { data: asisData } = await supabase
           .from('asistencias')
           .select('*')
           .in('alumno_id', alumnoIds)
+          .like('fecha', `${mesSeleccionado}%`)
           .order('fecha', { ascending: true })
 
         if (asisData) {
@@ -226,7 +230,7 @@ export default function Home() {
       }
       cargarMatrizAsistencias()
     }
-  }, [pestaña, cursoSeleccionado, alumnos, usuario])
+  }, [pestaña, cursoSeleccionado, alumnos, usuario, mesSeleccionado])
 
   const cargarAgenda = async () => {
     const { data } = await supabase.from('agenda').select('*, cursos(nombre)').order('fecha', { ascending: true })
@@ -544,22 +548,16 @@ export default function Home() {
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
-      {/* Estilos mejorados con un margen inferior grande para evitar que la insignia de Netlify pise los datos */}
+      {/* Estilos para impresión y saltos de página automáticos por bloques */}
       <style jsx global>{`
         @media print {
           body {
             background-color: #ffffff !important;
             color: #000000 !important;
           }
-          /* Oculta insignias o widgets flotantes de Netlify y desactiva elementos no deseados en PDF */
-          iframe[id*="netlify"], div[id*="netlify"], script + div, div:has(> a[href*="netlify"]) {
-            display: none !important;
-            visibility: hidden !important;
-          }
-          /* Añade espacio gigante abajo para aislar la tabla de cualquier marca flotante */
-          .print-container {
-            padding-bottom: 80px !important;
-            margin-bottom: 50px !important;
+          .page-break {
+            page-break-after: always !important;
+            break-after: page !important;
           }
         }
       `}</style>
@@ -674,60 +672,90 @@ export default function Home() {
       )}
 
       {pestaña === 'resumen' && (
-        <div className="print-container" style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155', paddingBottom: '70px', marginBottom: '40px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h3 style={{ color: '#60a5fa', margin: 0 }}>📋 Planilla Mensual de Asistencia (Matriz)</h3>
-            <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+        <div style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
+            <h3 style={{ color: '#60a5fa', margin: 0 }}>📋 Planilla Mensual de Asistencia</h3>
+            
+            {/* Selector de Mes y Botón de PDF */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input 
+                type="month" 
+                value={mesSeleccionado} 
+                onChange={(e) => setMesSeleccionado(e.target.value)} 
+                style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #3b82f6', fontSize: '13px' }} 
+              />
+              <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
+            </div>
           </div>
 
           {alumnos.length === 0 ? (
             <p style={{ color: '#94a3b8' }}>No hay alumnos en este curso.</p>
           ) : fechasMatriz.length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>No hay asistencias registradas todavía para armar la planilla.</p>
+            <p style={{ color: '#94a3b8' }}>No hay asistencias registradas para el mes seleccionado ({mesSeleccionado}).</p>
           ) : (
-            <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', color: '#fff', backgroundColor: '#0f172a' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#1e293b', borderBottom: '2px solid #3b82f6' }}>
-                    <th style={{ padding: '8px', textAlign: 'left', borderRight: '1px solid #334155', minWidth: '150px' }}>Apellido y Nombre</th>
-                    {fechasMatriz.map((f, idx) => {
-                      const partes = f.split('-')
-                      const formatoFecha = partes.length === 3 ? `${partes[2]}/${partes[1]}` : f
-                      return (
-                        <th key={idx} style={{ padding: '6px 4px', textAlign: 'center', borderRight: '1px solid #334155', minWidth: '40px', fontSize: '11px' }}>
-                          {formatoFecha}
-                        </th>
-                      )
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {alumnos.map((a) => (
-                    <tr key={a.id} style={{ borderBottom: '1px solid #334155' }}>
-                      <td style={{ padding: '8px', borderRight: '1px solid #334155', fontWeight: '500', whiteSpace: 'nowrap' }}>
-                        {a.apellido}, {a.nombre}
-                      </td>
-                      {fechasMatriz.map((f, idx) => {
-                        const reg = registrosMatriz.find(r => r.alumno_id === a.id && r.fecha === f)
-                        const estado = reg ? reg.estado : ''
-                        return (
-                          <td key={idx} style={{ padding: '6px 4px', textAlign: 'center', borderRight: '1px solid #334155', fontWeight: 'bold' }}>
-                            {estado === 'PRESENTE' ? (
-                              <span style={{ color: '#86efac' }}>•</span>
-                            ) : estado === 'TARDE' ? (
-                              <span style={{ color: '#fb923c' }}>T</span>
-                            ) : estado === 'AUSENTE' ? (
-                              <span style={{ color: '#fca5a5' }}>A</span>
-                            ) : (
-                              <span style={{ color: '#475569' }}>-</span>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {/* Dividimos los alumnos en bloques de 18 para evitar que la fila 21 toque la marca de agua */}
+              {(() => {
+                const filasPorPagina = 18;
+                const gruposAlumnos = [];
+                for (let i = 0; i < alumnos.length; i += filasPorPagina) {
+                  gruposAlumnos.push(alumnos.slice(i, i + filasPorPagina));
+                }
+
+                return gruposAlumnos.map((grupoAlumnos, grupoIdx) => (
+                  <div key={grupoIdx} className={grupoIdx < gruposAlumnos.length - 1 ? 'page-break' : ''} style={{ marginBottom: '30px' }}>
+                    {grupoIdx > 0 && (
+                      <div style={{ fontSize: '13px', color: '#60a5fa', marginBottom: '10px', fontWeight: 'bold' }}>
+                        📋 Continuación Planilla de Asistencia - Mes: {mesSeleccionado} (Pág. {grupoIdx + 1})
+                      </div>
+                    )}
+                    <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', color: '#fff', backgroundColor: '#0f172a' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#1e293b', borderBottom: '2px solid #3b82f6' }}>
+                            <th style={{ padding: '8px', textAlign: 'left', borderRight: '1px solid #334155', minWidth: '150px' }}>Apellido y Nombre</th>
+                            {fechasMatriz.map((f, idx) => {
+                              const partes = f.split('-')
+                              const formatoFecha = partes.length === 3 ? `${partes[2]}/${partes[1]}` : f
+                              return (
+                                <th key={idx} style={{ padding: '6px 4px', textAlign: 'center', borderRight: '1px solid #334155', minWidth: '40px', fontSize: '11px' }}>
+                                  {formatoFecha}
+                                </th>
+                              )
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {grupoAlumnos.map((a) => (
+                            <tr key={a.id} style={{ borderBottom: '1px solid #334155' }}>
+                              <td style={{ padding: '8px', borderRight: '1px solid #334155', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                                {a.apellido}, {a.nombre}
+                              </td>
+                              {fechasMatriz.map((f, idx) => {
+                                const reg = registrosMatriz.find(r => r.alumno_id === a.id && r.fecha === f)
+                                const estado = reg ? reg.estado : ''
+                                return (
+                                  <td key={idx} style={{ padding: '6px 4px', textAlign: 'center', borderRight: '1px solid #334155', fontWeight: 'bold' }}>
+                                    {estado === 'PRESENTE' ? (
+                                      <span style={{ color: '#86efac' }}>•</span>
+                                    ) : estado === 'TARDE' ? (
+                                      <span style={{ color: '#fb923c' }}>T</span>
+                                    ) : estado === 'AUSENTE' ? (
+                                      <span style={{ color: '#fca5a5' }}>A</span>
+                                    ) : (
+                                      <span style={{ color: '#475569' }}>-</span>
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           )}
         </div>
