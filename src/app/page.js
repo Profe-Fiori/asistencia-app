@@ -22,6 +22,9 @@ export default function Home() {
   const [obsClase, setObsClase] = useState('')
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
   
+  // Estado para el núcleo activo en la solapa de puntos
+  const [nucleoPuntosActivo, setNucleoPuntosActivo] = useState(1)
+  
   // Selector de mes y estados para la planilla matriz con filtro seguro
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7))
   const [fechasMatriz, setFechasMatriz] = useState([])
@@ -497,12 +500,13 @@ export default function Home() {
     ], { onConflict: ['alumno_id', 'fecha'] })
   }
 
+  // Función corregida para avanzar de núcleo dinámicamente
   const finalizarNucleoActual = async () => {
-    if (!confirm('¿Guardar los puntos acumulados de este núcleo para todos los alumnos?')) return
+    if (!confirm(`¿Guardar los puntos acumulados para el Núcleo ${nucleoPuntosActivo} y pasar al siguiente?`)) return
 
     const registrosPuntos = Object.entries(conteos).map(([alumno_id, cantidad]) => ({
       alumno_id: alumno_id,
-      nucleo_numero: 1, 
+      nucleo_numero: nucleoPuntosActivo, 
       puntos: cantidad,
       fecha: new Date().toISOString()
     }))
@@ -512,7 +516,12 @@ export default function Home() {
     if (error) {
       alert('Error al guardar los puntos: ' + error.message)
     } else {
-      alert('¡Puntos del núcleo guardados con éxito e impactados en el informe!')
+      alert(`¡Puntos del Núcleo ${nucleoPuntosActivo} guardados con éxito e impactados en el informe!`)
+      if (nucleoPuntosActivo < 6) {
+        setNucleoPuntosActivo(prev => prev + 1)
+      } else {
+        alert('¡Llegaste al Núcleo 6, es el último!')
+      }
     }
   }
 
@@ -794,7 +803,7 @@ export default function Home() {
 
       {pestaña === 'participacion' && (
         <div>
-          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Contador de Puntos - {fecha}</h3>
+          <h3 style={{ color: '#93c5fd', marginBottom: '10px' }}>Contador de Puntos - Núcleo {nucleoPuntosActivo} ({fecha})</h3>
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {alumnos.map((a) => {
               const valor = conteos[a.id] || 0
@@ -815,7 +824,7 @@ export default function Home() {
             <button 
               onClick={finalizarNucleoActual} 
               style={{ padding: '14px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
-              💾 Finalizar Núcleo y Pasar al Siguiente
+              💾 Finalizar Núcleo {nucleoPuntosActivo} y Pasar al Siguiente
             </button>
             <button 
               onClick={cerrarCicloLectivo} 
