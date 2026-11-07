@@ -486,7 +486,6 @@ export default function Home() {
     await supabase.from('calificaciones').upsert({ alumno_id, nucleo, ...actualizado }, { onConflict: ['alumno_id', 'nucleo'] })
   }
 
-  // Función para sumar o restar puntos y guardarlos al toque
   const cambiarConteo = async (alumno_id, delta) => {
     const valorActual = conteos[alumno_id] || 0
     const nuevoValor = Math.max(0, valorActual + delta)
@@ -498,7 +497,6 @@ export default function Home() {
     ], { onConflict: ['alumno_id', 'fecha'] })
   }
 
-  // Funciones para los botones de Puntos
   const finalizarNucleoActual = async () => {
     if (!confirm('¿Guardar los puntos acumulados de este núcleo para todos los alumnos?')) return
 
@@ -813,7 +811,6 @@ export default function Home() {
             })}
           </ul>
 
-          {/* Botones de Cierre al final de la lista de Puntos */}
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column' }}>
             <button 
               onClick={finalizarNucleoActual} 
@@ -1013,13 +1010,13 @@ export default function Home() {
                       <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>Núcleo {nuc}</span>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '10px', color: '#94a3b8' }}>Reg:</span>
-                        <input type="number" step="0.1" value={reg.nota_regular ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <input type="number" step="0.1" value={reg.nota_regular ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} onBlur={(e) => actualizarCalificacion(a.id, nuc, 'nota_regular', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
                         <span style={{ fontSize: '10px', color: '#94a3b8' }}>Rec1:</span>
-                        <input type="number" step="0.1" value={reg.recu_1 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <input type="number" step="0.1" value={reg.recu_1 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} onBlur={(e) => actualizarCalificacion(a.id, nuc, 'recu_1', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
                         <span style={{ fontSize: '10px', color: '#94a3b8' }}>Rec2:</span>
-                        <input type="number" step="0.1" value={reg.recu_2 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_2', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
+                        <input type="number" step="0.1" value={reg.recu_2 ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'recu_2', e.target.value)} onBlur={(e) => actualizarCalificacion(a.id, nuc, 'recu_2', e.target.value)} style={{ width: '40px', padding: '4px', textAlign: 'center', background: '#1e293b', color: '#fff', border: '1px solid #334155', borderRadius: '4px' }} />
                         <span style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }}>Final:</span>
-                        <input type="number" step="0.1" value={reg.nota_final ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }} />
+                        <input type="number" step="0.1" value={reg.nota_final ?? ''} onChange={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} onBlur={(e) => actualizarCalificacion(a.id, nuc, 'nota_final', e.target.value)} style={{ width: '45px', padding: '4px', textAlign: 'center', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold' }} />
                       </div>
                     </div>
                   )
