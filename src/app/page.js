@@ -486,7 +486,19 @@ export default function Home() {
     await supabase.from('calificaciones').upsert({ alumno_id, nucleo, ...actualizado }, { onConflict: ['alumno_id', 'nucleo'] })
   }
 
-  // Funciones para los nuevos botones de Puntos
+  // Función para sumar o restar puntos y guardarlos al toque
+  const cambiarConteo = async (alumno_id, delta) => {
+    const valorActual = conteos[alumno_id] || 0
+    const nuevoValor = Math.max(0, valorActual + delta)
+
+    setConteos(prev => ({ ...prev, [alumno_id]: nuevoValor }))
+
+    await supabase.from('conteo_participaciones').upsert([
+      { alumno_id, fecha, cantidad: nuevoValor }
+    ], { onConflict: ['alumno_id', 'fecha'] })
+  }
+
+  // Funciones para los botones de Puntos
   const finalizarNucleoActual = async () => {
     if (!confirm('¿Guardar los puntos acumulados de este núcleo para todos los alumnos?')) return
 
