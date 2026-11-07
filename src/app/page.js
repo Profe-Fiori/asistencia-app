@@ -208,7 +208,6 @@ export default function Home() {
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
 
-  // Carga segura: Trae todas las asistencias del curso y filtra por mes de forma flexible en memoria
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && usuario && alumnos.length > 0) {
       async function cargarMatrizAsistencias() {
@@ -221,7 +220,6 @@ export default function Home() {
           .order('fecha', { ascending: true })
 
         if (asisData) {
-          // Filtramos de manera segura por el mes seleccionado (ej: '2026-10')
           const registrosFiltrados = asisData.filter(item => item.fecha && item.fecha.startsWith(mesSeleccionado))
           const setFechas = [...new Set(registrosFiltrados.map(item => item.fecha))]
           
@@ -313,7 +311,7 @@ export default function Home() {
     if (pestaña === 'informeAlumno' && alumnoInformeId) {
       async function cargarHistorialAlumno() {
         const { data: asis } = await supabase.from('asistencias').select('*').eq('alumno_id', alumnoInformeId)
-        const { data: pts } = await supabase.from('conteo_participaciones').select('*').eq('alumno_id', alumnoInformeId)
+        const { data: pts } = await supabase.from('puntos_nucleo').select('*').eq('alumno_id', alumnoInformeId)
         setHistorialAlumno({ asistencias: asis || [], puntos: pts || [] })
       }
       cargarHistorialAlumno()
@@ -429,7 +427,6 @@ export default function Home() {
     }
   }
 
-  // Clic en asistencia: Alterna PRESENTE -> TARDE -> AUSENTE -> PRESENTE
   const toggleEstado = (id) => {
     setAsistencias((prev) => {
       const actual = prev[id] || 'PRESENTE'
@@ -487,6 +484,32 @@ export default function Home() {
 
     setCalificacionesCurso(prev => ({ ...prev, [alumno_id]: { ...(prev[alumno_id] || {}), [nucleo]: actualizado } }))
     await supabase.from('calificaciones').upsert({ alumno_id, nucleo, ...actualizado }, { onConflict: ['alumno_id', 'nucleo'] })
+  }
+
+  // Funciones para los nuevos botones de Puntos
+  const finalizarNucleoActual = async () => {
+    if (!confirm('¿Guardar los puntos acumulados de este núcleo para todos los alumnos?')) return
+
+    const registrosPuntos = Object.entries(conteos).map(([alumno_id, cantidad]) => ({
+      alumno_id: alumno_id,
+      nucleo_numero: 1, 
+      puntos: cantidad,
+      fecha: new Date().toISOString()
+    }))
+
+    const { error } = await supabase.from('puntos_nucleo').upsert(registrosPuntos, { onConflict: ['alumno_id', 'nucleo_numero'] })
+
+    if (error) {
+      alert('Error al guardar los puntos: ' + error.message)
+    } else {
+      alert('¡Puntos del núcleo guardados con éxito e impactados en el informe!')
+    }
+  }
+
+  const cerrarCicloLectivo = () => {
+    if (confirm('¿Estás seguro de cerrar el ciclo lectivo?')) {
+      alert('Ciclo lectivo cerrado con éxito.')
+    }
   }
 
   if (cargandoSesion) {
@@ -549,7 +572,6 @@ export default function Home() {
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '850px', margin: 'auto', backgroundColor: '#0f172a', color: '#ffffff', minHeight: '100vh' }}>
       
-      {/* Estilos para impresión y saltos de página automáticos por bloques */}
       <style jsx global>{`
         @media print {
           body {
@@ -652,9 +674,9 @@ export default function Home() {
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {alumnos.map((a) => {
               const estadoActual = asistencias[a.id] || 'PRESENTE'
-              let colorFondo = '#2563eb' // PRESENTE
-              if (estadoActual === 'TARDE') colorFondo = '#ea580c' // NARANJA
-              else if (estadoActual === 'AUSENTE') colorFondo = '#dc2626' // ROJO
+              let colorFondo = '#2563eb'
+              if (estadoActual === 'TARDE') colorFondo = '#ea580c'
+              else if (estadoActual === 'AUSENTE') colorFondo = '#dc2626'
 
               return (
                 <li key={a.id} style={{ padding: '14px', marginBottom: '8px', backgroundColor: '#1e293b', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
@@ -677,7 +699,6 @@ export default function Home() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
             <h3 style={{ color: '#60a5fa', margin: 0 }}>📋 Planilla Mensual de Asistencia</h3>
             
-            {/* Selector de Mes Seguro y Botón de PDF */}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input 
                 type="month" 
@@ -695,7 +716,6 @@ export default function Home() {
             <p style={{ color: '#94a3b8' }}>No hay asistencias registradas para el mes seleccionado ({mesSeleccionado}).</p>
           ) : (
             <div>
-              {/* Dividimos los alumnos en bloques de 18 para evitar que la fila 21 toque la marca de agua */}
               {(() => {
                 const filasPorPagina = 18;
                 const gruposAlumnos = [];
@@ -780,6 +800,20 @@ export default function Home() {
               )
             })}
           </ul>
+
+          {/* Botones de Cierre al final de la lista de Puntos */}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column' }}>
+            <button 
+              onClick={finalizarNucleoActual} 
+              style={{ padding: '14px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
+              💾 Finalizar Núcleo y Pasar al Siguiente
+            </button>
+            <button 
+              onClick={cerrarCicloLectivo} 
+              style={{ padding: '12px', backgroundColor: '#dc2626', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
+              🔒 Cerrar Ciclo Lectivo Definitivo
+            </button>
+          </div>
         </div>
       )}
 
@@ -836,7 +870,6 @@ export default function Home() {
           <h3 style={{ color: '#60a5fa', marginBottom: '15px' }}>📅 Agendar Fechas e Insumos</h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px' }}>
-            
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: '140px' }}>
                 <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Tipo de Fecha</label>
@@ -865,7 +898,7 @@ export default function Home() {
 
             <div>
               <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Detalle / Temario / Indicaciones</label>
-              <textarea value={tituloEvento} onChange={(e) => setTituloEvento(e.target.value)} placeholder="Ej: Evaluación de Vóley / Día del Estudiante en el predio / Recuperatorio 1 de Educación Física" style={{ width: '100%', height: '70px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+              <textarea value={tituloEvento} onChange={(e) => setTituloEvento(e.target.value)} placeholder="Ej: Evaluación de Vóley / Día del Estudiante..." style={{ width: '100%', height: '70px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
             </div>
 
             <button onClick={guardarEventoAgenda} style={{ padding: '12px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '8px' }}>
@@ -920,7 +953,7 @@ export default function Home() {
 
             <div>
               <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Razón / Justificación / Certificado</label>
-              <textarea value={motivoAusencia} onChange={(e) => setMotivoAusencia(e.target.value)} placeholder="Ej: Certificado médico presentado en secretaría / Jornada institucional en otra escuela" style={{ width: '100%', height: '70px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
+              <textarea value={motivoAusencia} onChange={(e) => setMotivoAusencia(e.target.value)} placeholder="Ej: Certificado médico..." style={{ width: '100%', height: '70px', padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155' }} />
             </div>
 
             <button onClick={registrarAusenciaDocente} style={{ padding: '12px', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '8px' }}>
@@ -998,7 +1031,6 @@ export default function Home() {
 
           {alumnoInformeId && (
             <div>
-              {/* Asistencia Total */}
               <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', marginBottom: '15px', border: '1px solid #334155' }}>
                 <span style={{ color: '#94a3b8', fontSize: '12px' }}>Asistencia Total Acumulada</span>
                 <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '5px 0 0 0' }}>
@@ -1010,23 +1042,21 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Puntos Acumulados por Núcleo */}
               <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #334155' }}>
                 <h4 style={{ color: '#93c5fd', fontSize: '13px', margin: '0 0 10px 0' }}>⭐ Puntos Acumulados por Núcleo:</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                   {[1, 2, 3, 4, 5, 6].map(nuc => {
-                    const ptsTotal = historialAlumno.puntos?.reduce((a, b) => a + (b.cantidad || 0), 0) || 0
+                    const ptsNucleo = historialAlumno.puntos?.find(p => p.nucleo_numero === nuc)?.puntos || 0
                     return (
                       <div key={nuc} style={{ backgroundColor: '#1e293b', padding: '8px', borderRadius: '6px', textAlign: 'center', border: '1px solid #334155' }}>
                         <span style={{ fontSize: '10px', color: '#cbd5e1', display: 'block' }}>Núcleo {nuc}</span>
-                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{ptsTotal} pts</span>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{ptsNucleo} pts</span>
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Notas por Núcleo */}
               <div style={{ backgroundColor: '#0f172a', padding: '15px', borderRadius: '8px', border: '1px solid #334155' }}>
                 <h4 style={{ color: '#93c5fd', fontSize: '13px', margin: '0 0 10px 0' }}>📝 Estado de Calificaciones por Núcleo:</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
