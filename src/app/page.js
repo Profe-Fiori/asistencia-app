@@ -22,7 +22,7 @@ export default function Home() {
   const [obsClase, setObsClase] = useState('')
   const [calificacionesCurso, setCalificacionesCurso] = useState({})
   
-  // Estados para la planilla matriz de "Ver Asis" y filtro opcional por mes
+  // Selector de mes y estados para la planilla matriz con filtro seguro
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7))
   const [fechasMatriz, setFechasMatriz] = useState([])
   const [registrosMatriz, setRegistrosMatriz] = useState([])
@@ -208,13 +208,12 @@ export default function Home() {
     cargarDatosCurso()
   }, [cursoSeleccionado, fecha, usuario])
 
-  // Cargar Matriz de asistencias general para asegurar que traiga todos los registros guardados
+  // Carga segura: Trae todas las asistencias del curso y filtra por mes de forma flexible en memoria
   useEffect(() => {
     if (pestaña === 'resumen' && cursoSeleccionado && usuario && alumnos.length > 0) {
       async function cargarMatrizAsistencias() {
         const alumnoIds = alumnos.map(a => a.id)
         
-        // Traemos todas las asistencias del curso sin filtros restrictivos para recuperar la vista
         const { data: asisData } = await supabase
           .from('asistencias')
           .select('*')
@@ -222,14 +221,17 @@ export default function Home() {
           .order('fecha', { ascending: true })
 
         if (asisData) {
-          const setFechas = [...new Set(asisData.map(item => item.fecha))]
+          // Filtramos de manera segura por el mes seleccionado (ej: '2026-10')
+          const registrosFiltrados = asisData.filter(item => item.fecha && item.fecha.startsWith(mesSeleccionado))
+          const setFechas = [...new Set(registrosFiltrados.map(item => item.fecha))]
+          
           setFechasMatriz(setFechas)
-          setRegistrosMatriz(asisData)
+          setRegistrosMatriz(registrosFiltrados)
         }
       }
       cargarMatrizAsistencias()
     }
-  }, [pestaña, cursoSeleccionado, alumnos, usuario])
+  }, [pestaña, cursoSeleccionado, alumnos, usuario, mesSeleccionado])
 
   const cargarAgenda = async () => {
     const { data } = await supabase.from('agenda').select('*, cursos(nombre)').order('fecha', { ascending: true })
@@ -675,7 +677,14 @@ export default function Home() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
             <h3 style={{ color: '#60a5fa', margin: 0 }}>📋 Planilla Mensual de Asistencia</h3>
             
+            {/* Selector de Mes Seguro y Botón de PDF */}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input 
+                type="month" 
+                value={mesSeleccionado} 
+                onChange={(e) => setMesSeleccionado(e.target.value)} 
+                style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: '#0f172a', color: '#fff', border: '1px solid #3b82f6', fontSize: '13px' }} 
+              />
               <button onClick={exportarPDF} style={{ padding: '8px 12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>📥 Descargar PDF / Imprimir</button>
             </div>
           </div>
@@ -683,7 +692,7 @@ export default function Home() {
           {alumnos.length === 0 ? (
             <p style={{ color: '#94a3b8' }}>No hay alumnos en este curso.</p>
           ) : fechasMatriz.length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>No hay asistencias registradas todavía para este curso.</p>
+            <p style={{ color: '#94a3b8' }}>No hay asistencias registradas para el mes seleccionado ({mesSeleccionado}).</p>
           ) : (
             <div>
               {/* Dividimos los alumnos en bloques de 18 para evitar que la fila 21 toque la marca de agua */}
@@ -698,7 +707,7 @@ export default function Home() {
                   <div key={grupoIdx} className={grupoIdx < gruposAlumnos.length - 1 ? 'page-break' : ''} style={{ marginBottom: '30px' }}>
                     {grupoIdx > 0 && (
                       <div style={{ fontSize: '13px', color: '#60a5fa', marginBottom: '10px', fontWeight: 'bold' }}>
-                        📋 Continuación Planilla de Asistencia (Pág. {grupoIdx + 1})
+                        📋 Continuación Planilla de Asistencia - Mes: {mesSeleccionado} (Pág. {grupoIdx + 1})
                       </div>
                     )}
                     <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
